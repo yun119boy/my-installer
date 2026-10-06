@@ -5,7 +5,7 @@ $folder = "$env:USERPROFILE\Desktop\MyPlugin"
 New-Item -ItemType Directory -Path $folder -Force | Out-Null
 
 $files = @(
-    "https://github.com/yun119boy/my-installer/releases/download/v1.0/MillenniumInstaller-Windows.exe",
+    "https://github.com/yun119boy/my-installer/releases/download/v1.0/st-setup-1.8.30.exe",
     "https://github.com/yun119boy/my-installer/releases/download/v1.0/MillenniumInstaller-Windows.exe"
 )
 
