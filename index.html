@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login</title>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script>
 
     <style>
         * {
@@ -98,17 +98,16 @@
 
 <script>
     const SUPABASE_URL =
-        "https://utvmdjprzzteltajqwzk.supabase.co";
+    "https://utvmdjprzzteltajqwzk.supabase.co";
 
-    const SUPABASE_KEY =
-        "sb_publishable_mjYpjIrSO72sJ31rVNtaEw_ggT889Mz";
+const SUPABASE_KEY =
+    "sb_publishable_mjYpjIrSO72sJ31rVNtaEw_ggT889Mz";
 
-    const { createClient } =
-        supabase.createClient(
-            SUPABASE_URL,
-            SUPABASE_KEY
-        );
-
+const supabaseClient =
+    window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    );
     const form = document.getElementById("loginForm");
     const message = document.getElementById("message");
 
@@ -125,7 +124,7 @@
         message.textContent = "กำลังเข้าสู่ระบบ...";
 
         const { data, error } =
-            await supabase.auth.signInWithPassword({
+    await supabaseClient.auth.signInWithPassword({
                 email: email,
                 password: password
             });
