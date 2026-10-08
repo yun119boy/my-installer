@@ -229,15 +229,41 @@
         </div>
 
 
-        <div class="section">
+<div class="section">
 
-            <h2>Key Management</h2>
+    <h2>🔑 Key Management</h2>
 
-            <p>
-                ระบบสร้างและจัดการ Key จะทำในขั้นต่อไป
-            </p>
+    <label>เลือกไฟล์</label>
 
-        </div>
+    <select
+        id="keyFile"
+        style="
+            width: 100%;
+            padding: 12px;
+            border: 0;
+            border-radius: 6px;
+        "
+    >
+        <option value="">กำลังโหลดไฟล์...</option>
+    </select>
+
+    <button onclick="generateKey()">
+        Generate Key
+    </button>
+
+    <div
+        id="generatedKey"
+        style="
+            margin-top: 20px;
+            padding: 15px;
+            background: #374151;
+            border-radius: 8px;
+            display: none;
+            word-break: break-all;
+        "
+    ></div>
+
+</div>
 
 
    <div class="section">
@@ -332,6 +358,7 @@ function showDashboard() {
     dashboard.style.display = "block";
 
     loadFiles();
+    loadKeyFiles();
 
 }
 
@@ -526,7 +553,127 @@ async function loadFiles() {
             </div>
         `).join("");
 }
+async function loadKeyFiles() {
 
+    const select =
+        document.getElementById("keyFile");
+
+    const { data, error } =
+        await supabaseClient
+            .from("files")
+            .select("id, name")
+            .order("name");
+
+    if (error) {
+
+        console.error(error);
+
+        select.innerHTML =
+            '<option value="">โหลดไฟล์ไม่สำเร็จ</option>';
+
+        return;
+    }
+
+    if (!data || data.length === 0) {
+
+        select.innerHTML =
+            '<option value="">ยังไม่มีไฟล์</option>';
+
+        return;
+    }
+
+    select.innerHTML =
+        '<option value="">-- เลือกไฟล์ --</option>';
+
+    data.forEach(file => {
+
+        const option =
+            document.createElement("option");
+
+        option.value = file.id;
+        option.textContent = file.name;
+
+        select.appendChild(option);
+
+    });
+}
+
+
+function createRandomKey() {
+
+    const chars =
+        "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    let key = "";
+
+    for (let i = 0; i < 16; i++) {
+
+        if (i > 0 && i % 4 === 0) {
+            key += "-";
+        }
+
+        key +=
+            chars[
+                Math.floor(
+                    Math.random() * chars.length
+                )
+            ];
+    }
+
+    return key;
+}
+
+
+async function generateKey() {
+
+    const fileId =
+        document.getElementById("keyFile").value;
+
+    if (!fileId) {
+
+        alert("กรุณาเลือกไฟล์ก่อน");
+
+        return;
+    }
+
+    const keyCode =
+        createRandomKey();
+
+    const { error } =
+        await supabaseClient
+            .from("keys")
+            .insert({
+                key_code: keyCode,
+                file_id: fileId,
+                status: "unused"
+            });
+
+    if (error) {
+
+        alert(
+            "สร้าง Key ไม่สำเร็จ: "
+            + error.message
+        );
+
+        console.error(error);
+
+        return;
+    }
+
+    const generatedKey =
+        document.getElementById("generatedKey");
+
+    generatedKey.style.display = "block";
+
+    generatedKey.innerHTML = `
+        <strong>สร้าง Key สำเร็จ!</strong>
+        <br><br>
+        <span style="font-size: 20px;">
+            ${keyCode}
+        </span>
+    `;
+
+}
     
 </script>
 
