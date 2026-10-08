@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login</title>
+    <title>My Installer Admin</title>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script>
 
@@ -15,10 +15,8 @@
         body {
             margin: 0;
             min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             background: #111827;
+            color: white;
             font-family: Arial, sans-serif;
         }
 
@@ -27,24 +25,25 @@
             padding: 30px;
             background: #1f2937;
             border-radius: 12px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }
 
-        h1 {
-            color: white;
+        .login-box h1 {
             text-align: center;
-            margin-bottom: 25px;
         }
 
         label {
             display: block;
+            margin: 15px 0 6px;
             color: #d1d5db;
-            margin-bottom: 6px;
         }
 
         input {
             width: 100%;
             padding: 12px;
-            margin-bottom: 16px;
             border: 0;
             border-radius: 6px;
         }
@@ -52,6 +51,7 @@
         button {
             width: 100%;
             padding: 12px;
+            margin-top: 20px;
             border: 0;
             border-radius: 6px;
             cursor: pointer;
@@ -61,86 +61,367 @@
         #message {
             margin-top: 15px;
             text-align: center;
-            color: #f87171;
+        }
+
+        #dashboard {
+            display: none;
+        }
+
+        header {
+            padding: 20px 30px;
+            background: #1f2937;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            margin: 0;
+        }
+
+        #logoutButton {
+            width: auto;
+            margin: 0;
+            padding: 10px 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .card {
+            background: #1f2937;
+            padding: 25px;
+            border-radius: 12px;
+        }
+
+        .card h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #9ca3af;
+        }
+
+        .number {
+            font-size: 40px;
+            font-weight: bold;
+        }
+
+        .section {
+            margin-top: 30px;
+            background: #1f2937;
+            padding: 25px;
+            border-radius: 12px;
+        }
+
+        @media (max-width: 700px) {
+            .cards {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 
 <body>
 
-<div class="login-box">
+<!-- LOGIN -->
+
+<div id="loginPage" class="login-box">
+
     <h1>Admin Login</h1>
 
     <form id="loginForm">
 
         <label>Email</label>
+
         <input
             type="email"
             id="email"
-            placeholder="Admin email"
             required
         >
 
         <label>Password</label>
+
         <input
             type="password"
             id="password"
-            placeholder="Password"
             required
         >
 
-        <button type="submit">Login</button>
+        <button type="submit">
+            Login
+        </button>
 
     </form>
 
     <div id="message"></div>
+
 </div>
 
+
+<!-- DASHBOARD -->
+
+<div id="dashboard">
+
+    <header>
+
+        <h1>My Installer Admin</h1>
+
+        <button id="logoutButton">
+            Logout
+        </button>
+
+    </header>
+
+
+    <div class="container">
+
+        <div class="cards">
+
+            <div class="card">
+
+                <h2>📁 Files</h2>
+
+                <div
+                    class="number"
+                    id="fileCount"
+                >
+                    0
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <h2>🔑 Keys</h2>
+
+                <div
+                    class="number"
+                    id="keyCount"
+                >
+                    0
+                </div>
+
+            </div>
+
+
+            <div class="card">
+
+                <h2>📊 Usage</h2>
+
+                <div
+                    class="number"
+                    id="usageCount"
+                >
+                    0
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>File Management</h2>
+
+            <p>
+                ระบบจัดการไฟล์จะทำในขั้นต่อไป
+            </p>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>Key Management</h2>
+
+            <p>
+                ระบบสร้างและจัดการ Key จะทำในขั้นต่อไป
+            </p>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>Usage Logs</h2>
+
+            <p>
+                ระบบประวัติการใช้งานจะทำในขั้นต่อไป
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
+
+
 <script>
-    const SUPABASE_URL =
+
+const SUPABASE_URL =
     "https://utvmdjprzzteltajqwzk.supabase.co";
 
 const SUPABASE_KEY =
     "sb_publishable_mjYpjIrSO72sJ31rVNtaEw_ggT889Mz";
+
 
 const supabaseClient =
     window.supabase.createClient(
         SUPABASE_URL,
         SUPABASE_KEY
     );
-    const form = document.getElementById("loginForm");
-    const message = document.getElementById("message");
 
-    form.addEventListener("submit", async (event) => {
+
+const loginPage =
+    document.getElementById("loginPage");
+
+const dashboard =
+    document.getElementById("dashboard");
+
+const loginForm =
+    document.getElementById("loginForm");
+
+const message =
+    document.getElementById("message");
+
+const logoutButton =
+    document.getElementById("logoutButton");
+
+
+// ตรวจสอบว่ามี Login อยู่แล้วหรือไม่
+
+async function checkSession() {
+
+    const {
+        data: {
+            session
+        }
+    } = await supabaseClient.auth.getSession();
+
+
+    if (session) {
+
+        showDashboard();
+
+    }
+
+}
+
+
+// แสดง Dashboard
+
+function showDashboard() {
+
+    loginPage.style.display = "none";
+
+    dashboard.style.display = "block";
+
+}
+
+
+// Login
+
+loginForm.addEventListener(
+    "submit",
+    async (event) => {
 
         event.preventDefault();
 
+
         const email =
-            document.getElementById("email").value;
+            document.getElementById(
+                "email"
+            ).value;
+
 
         const password =
-            document.getElementById("password").value;
+            document.getElementById(
+                "password"
+            ).value;
 
-        message.textContent = "กำลังเข้าสู่ระบบ...";
 
-        const { data, error } =
-    await supabaseClient.auth.signInWithPassword({
-                email: email,
-                password: password
-            });
+        message.style.color =
+            "#ffffff";
+
+        message.textContent =
+            "กำลังเข้าสู่ระบบ...";
+
+
+        const {
+            data,
+            error
+        } =
+            await supabaseClient.auth
+                .signInWithPassword({
+
+                    email: email,
+
+                    password: password
+
+                });
+
 
         if (error) {
+
+            message.style.color =
+                "#f87171";
+
             message.textContent =
-                "เข้าสู่ระบบไม่สำเร็จ: " + error.message;
+                "เข้าสู่ระบบไม่สำเร็จ: "
+                + error.message;
+
             return;
+
         }
 
-        message.style.color = "#4ade80";
+
+        message.style.color =
+            "#4ade80";
+
         message.textContent =
             "เข้าสู่ระบบสำเร็จ!";
 
-        console.log(data);
-    });
+
+        showDashboard();
+
+    }
+);
+
+
+// Logout
+
+logoutButton.addEventListener(
+    "click",
+    async () => {
+
+        await supabaseClient.auth.signOut();
+
+        dashboard.style.display =
+            "none";
+
+        loginPage.style.display =
+            "block";
+
+        message.textContent = "";
+
+    }
+);
+
+
+// เริ่มตรวจ Session
+
+checkSession();
+
 </script>
 
 </body>
