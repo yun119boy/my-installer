@@ -265,11 +265,22 @@
 
 </div>
 
+<div class="section">
 
-   <div class="section">
+    <h2>🔑 Generated Keys</h2>
+
+    <div id="keyList">
+        กำลังโหลด...
+    </div>
+
+</div>
+
+
+<div class="section">
 
     <h2>File Management</h2>
 
+    
     <input
         type="text"
         id="fileName"
@@ -359,9 +370,9 @@ function showDashboard() {
 
     loadFiles();
     loadKeyFiles();
+    loadKeys();
 
 }
-
 // Login
 
 loginForm.addEventListener(
@@ -673,8 +684,125 @@ async function generateKey() {
         </span>
     `;
 
+loadKeys();
+
 }
     
+    async function loadKeys() {
+
+    const keyList =
+        document.getElementById("keyList");
+
+    const { data, error } =
+        await supabaseClient
+            .from("keys")
+            .select(`
+                id,
+                key_code,
+                status,
+                first_ip,
+                first_used_at,
+                created_at,
+                file_id,
+                files (
+                    name
+                )
+            `)
+            .order("created_at", {
+                ascending: false
+            });
+
+    if (error) {
+
+        console.error(error);
+
+        keyList.innerHTML =
+            "โหลด Keys ไม่สำเร็จ: "
+            + error.message;
+
+        return;
+    }
+
+    if (!data || data.length === 0) {
+
+        keyList.innerHTML =
+            "ยังไม่มี Key";
+
+        return;
+    }
+
+    keyList.innerHTML =
+        data.map(key => {
+
+            const fileName =
+                key.files
+                    ? key.files.name
+                    : "ไม่ทราบไฟล์";
+
+            const status =
+                key.status || "unused";
+
+            const ip =
+                key.first_ip || "-";
+
+            const usedAt =
+                key.first_used_at
+                    ? new Date(
+                        key.first_used_at
+                      ).toLocaleString("th-TH")
+                    : "-";
+
+            return `
+                <div style="
+                    padding: 15px;
+                    margin-bottom: 10px;
+                    background: #374151;
+                    border-radius: 8px;
+                ">
+
+                    <div style="
+                        font-size: 20px;
+                        font-weight: bold;
+                        word-break: break-all;
+                    ">
+                        ${key.key_code}
+                    </div>
+
+                    <div style="
+                        margin-top: 10px;
+                        color: #d1d5db;
+                    ">
+                        📁 File: ${fileName}
+                    </div>
+
+                    <div style="
+                        margin-top: 5px;
+                        color: #d1d5db;
+                    ">
+                        📌 Status: ${status}
+                    </div>
+
+                    <div style="
+                        margin-top: 5px;
+                        color: #d1d5db;
+                    ">
+                        🌐 First IP: ${ip}
+                    </div>
+
+                    <div style="
+                        margin-top: 5px;
+                        color: #d1d5db;
+                    ">
+                        🕒 First Used:
+                        ${usedAt}
+                    </div>
+
+                </div>
+            `;
+
+        }).join("");
+}
+
 </script>
 
 </body>
