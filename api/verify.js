@@ -1,20 +1,16 @@
+
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  
-module.exports = async function handler(req, res) {
-  res.setHeader("Cache-Control", "no-store");
-
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).json({
-      valid: false,
-      message: "Method not allowed"
-    });
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
   }
 
   if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
+    res.setHeader("Allow", "POST, OPTIONS");
     return res.status(405).json({
       valid: false,
       message: "Method not allowed"
@@ -82,10 +78,10 @@ module.exports = async function handler(req, res) {
       downloadUrl: record.files.storage_url
     });
   } catch (error) {
-    console.error("License verification failed");
+    console.error("License verification failed:", error.message);
     return res.status(500).json({
       valid: false,
       message: "ไม่สามารถตรวจสอบคีย์ได้ในขณะนี้"
     });
   }
-}
+};
