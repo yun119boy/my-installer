@@ -45,6 +45,8 @@ const deviceId =
     ? req.body.deviceId.trim()
     : "";
 
+console.log("Device ID received:", JSON.stringify(deviceId));
+  
 if (
   !deviceId ||
   deviceId.length > 200 ||
