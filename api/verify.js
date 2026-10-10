@@ -47,16 +47,31 @@ const deviceId =
 
 console.log("Device ID received:", JSON.stringify(deviceId));
   
-if (
-  !deviceId ||
-  deviceId.length > 200 ||
-  !/^[a-zA-Z0-9-]+$/.test(deviceId)
-) {
+
+if (!deviceId) {
+  console.log("Device ID validation failed: missing or not a string");
   return res.status(400).json({
     valid: false,
-    message: "ไม่พบ Device ID ที่ถูกต้อง"
+    message: "ไม่พบ Device ID"
   });
 }
+
+if (deviceId.length > 200) {
+  console.log("Device ID validation failed: too long", deviceId.length);
+  return res.status(400).json({
+    valid: false,
+    message: "Device ID ยาวเกินกำหนด"
+  });
+}
+
+if (!/^[a-zA-Z0-9-]+$/.test(deviceId)) {
+  console.log("Device ID validation failed: invalid characters");
+  return res.status(400).json({
+    valid: false,
+    message: "รูปแบบ Device ID ไม่ถูกต้อง"
+  });
+}
+
 
   
   try {
