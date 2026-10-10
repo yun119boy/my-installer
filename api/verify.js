@@ -45,8 +45,8 @@ module.exports = async function handler(req, res) {
       ? forwarded.split(",")[0].trim()
       : "unknown";
 
-    const response = await fetch(
-      `${supabaseUrl}/rest/v1/rpc/redeem_license`,
+    const response = await fetch(  
+`${supabaseUrl}/rest/v1/rpc/check_license`,
       {
         method: "POST",
         headers: {
@@ -56,7 +56,6 @@ module.exports = async function handler(req, res) {
         },
         body: JSON.stringify({
           p_key: key,
-          p_ip: ip
         })
       }
     );
