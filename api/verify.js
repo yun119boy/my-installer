@@ -39,6 +39,24 @@ module.exports = async function handler(req, res) {
     });
   }
 
+
+const deviceId =
+  typeof req.body?.deviceId === "string"
+    ? req.body.deviceId.trim()
+    : "";
+
+if (
+  !deviceId ||
+  deviceId.length > 200 ||
+  !/^[a-zA-Z0-9-]+$/.test(deviceId)
+) {
+  return res.status(400).json({
+    valid: false,
+    message: "ไม่พบ Device ID ที่ถูกต้อง"
+  });
+}
+
+  
   try {
     const forwarded = req.headers["x-forwarded-for"];
     const ip = typeof forwarded === "string"
