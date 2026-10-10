@@ -27,12 +27,12 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  const keyCode =
+  const key =
     typeof req.body?.key === "string"
       ? req.body.key.trim().toUpperCase()
       : "";
 
-  if (!keyCode || keyCode.length > 100) {
+  if (!key || key.length > 100) {
     return res.status(400).json({
       valid: false,
       message: "กรุณากรอก License Key ให้ถูกต้อง"
@@ -40,43 +40,37 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    const forwarded = req.headers["x-forwarded-for"];
+    const ip = typeof forwarded === "string"
+      ? forwarded.split(",")[0].trim()
+      : "unknown";
+
     const response = await fetch(
-      `${supabaseUrl}/rest/v1/keys?key_code=eq.${encodeURIComponent(keyCode)}&select=id,key_code,status,file_id,first_ip,first_used_at,files(name,storage_url)`,
+      `${supabaseUrl}/rest/v1/rpc/redeem_license`,
       {
+        method: "POST",
         headers: {
+          "Content-Type": "application/json",
           apikey: serviceKey,
           Authorization: `Bearer ${serviceKey}`
-        }
+        },
+        body: JSON.stringify({
+          p_key: key,
+          p_ip: ip
+        })
       }
     );
 
     if (!response.ok) {
-      throw new Error("Database query failed");
-    }
-
-    const rows = await response.json();
-    const record = rows[0];
-
-    if (!record || record.status !== "unused") {
-      return res.status(200).json({
+      console.error("License redemption request failed:", response.status);
+      return res.status(500).json({
         valid: false,
-        message: "คีย์ไม่ถูกต้องหรือถูกใช้งานแล้ว"
+        message: "ไม่สามารถตรวจสอบคีย์ได้ในขณะนี้"
       });
     }
 
-    if (!record.files) {
-      return res.status(200).json({
-        valid: false,
-        message: "ไม่พบไฟล์ที่ผูกกับคีย์นี้"
-      });
-    }
-
-    return res.status(200).json({
-      valid: true,
-      message: "ตรวจสอบคีย์สำเร็จ",
-      fileName: record.files.name,
-      downloadUrl: record.files.storage_url
-    });
+    const result = await response.json();
+    return res.status(200).json(result);
   } catch (error) {
     console.error("License verification failed:", error.message);
     return res.status(500).json({
