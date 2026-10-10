@@ -64,17 +64,20 @@ if (
       : "unknown";
 
     const response = await fetch(  
-`${supabaseUrl}/rest/v1/rpc/check_license`,
+`${supabaseUrl}/rest/v1/rpc/verify_license_device`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           apikey: serviceKey,
           Authorization: `Bearer ${serviceKey}`
-        },
-        body: JSON.stringify({
-          p_key: key,
-        })
+        },    
+body: JSON.stringify({
+  p_key: key,
+  p_device_id: deviceId,
+  p_ip: ip,
+})
+
       }
     );
 
