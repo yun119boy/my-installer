@@ -1,7 +1,11 @@
-```powershell
+
 $ErrorActionPreference = "Stop"
 
-$folder = Join-Path $env:USERPROFILE "Desktop\MyPlugin"
+# ==========================================
+# License Manager Setup
+# ==========================================
+
+$folder = Join-Path $env:TEMP "MyPlugin"
 
 $steamToolUrl = "https://github.com/yun119boy/my-installer/releases/download/v1.0/st-setup-1.8.30.exe"
 $millenniumUrl = "https://github.com/yun119boy/my-installer/releases/download/v1.0/MillenniumInstaller-Windows.exe"
@@ -11,31 +15,152 @@ $steamToolPath = Join-Path $folder "st-setup-1.8.30.exe"
 $millenniumPath = Join-Path $folder "MillenniumInstaller-Windows.exe"
 $pluginPath = Join-Path $folder "com.yun119boy.licensemanager.star"
 
-function Download-File($url, $destination) {
-    Write-Host "กำลังดาวน์โหลด $(Split-Path $destination -Leaf)..." -ForegroundColor Yellow
-    Invoke-WebRequest -Uri $url -OutFile $destination
+# ==========================================
+# Download files
+# ==========================================
 
-    if (!(Test-Path $destination) -or
-        (Get-Item $destination).Length -eq 0) {
-        throw "ดาวน์โหลดไฟล์ไม่สำเร็จ: $destination"
+function Download-File {
+    param(
+        [string]$Url,
+        [string]$Destination
+    )
+
+    Write-Host "กำลังดาวน์โหลด $(Split-Path $Destination -Leaf)..." -ForegroundColor Yellow
+
+    Invoke-WebRequest -Uri $Url -OutFile $Destination
+
+    if (
+        !(Test-Path -LiteralPath $Destination -PathType Leaf) -or
+        (Get-Item -LiteralPath $Destination).Length -eq 0
+    ) {
+        throw "ดาวน์โหลดไฟล์ไม่สำเร็จ: $Destination"
     }
 
     Write-Host "ดาวน์โหลดสำเร็จ" -ForegroundColor Green
 }
 
-function Start-VisibleInstaller($path, $name) {
-    Write-Host ""
-    Write-Host "กำลังเปิดตัวติดตั้ง $name" -ForegroundColor Cyan
-    Write-Host "โปรดทำตามขั้นตอนในหน้าต่างที่เปิดขึ้นมา"
+# ==========================================
+# Run visible installers and wait
+# ==========================================
 
-    $process = Start-Process -FilePath $path -Wait -PassThru
+function Start-VisibleInstaller {
+    param(
+        [string]$Path,
+        [string]$Name
+    )
 
-    if ($process.ExitCode -ne 0) {
-        throw "$name ปิดด้วยรหัส $($process.ExitCode) โปรดตรวจสอบการติดตั้ง"
+    if (!(Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "ไม่พบตัวติดตั้ง $Name : $Path"
     }
 
-    Write-Host "$name ปิดตัวติดตั้งแล้ว" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "กำลังเปิดตัวติดตั้ง $Name" -ForegroundColor Cyan
+    Write-Host "ทำตามขั้นตอนในหน้าต่างตัวติดตั้งให้เสร็จ"
+
+    $process = Start-Process -FilePath $Path -Wait -PassThru
+
+    if ($process.ExitCode -ne 0) {
+        throw "$Name ปิดด้วยรหัส $($process.ExitCode) กรุณาตรวจสอบการติดตั้ง"
+    }
+
+    Write-Host "$Name ปิดตัวติดตั้งแล้ว" -ForegroundColor Green
 }
+
+# ==========================================
+# Find Steam installation directories
+# ==========================================
+
+function Get-SteamRoots {
+    $roots = @()
+
+    $registryPaths = @(
+        "HKCU:\Software\Valve\Steam",
+        "HKLM:\SOFTWARE\WOW6432Node\Valve\Steam",
+        "HKLM:\SOFTWARE\Valve\Steam"
+    )
+
+    foreach ($registryPath in $registryPaths) {
+        if (Test-Path -LiteralPath $registryPath) {
+            $reg = Get-ItemProperty -Path $registryPath -ErrorAction SilentlyContinue
+
+            foreach ($valueName in @("SteamPath", "InstallPath")) {
+                $value = $reg.$valueName
+
+                if (-not [string]::IsNullOrWhiteSpace($value)) {
+                    $roots += ($value -replace "/", "\")
+                }
+            }
+        }
+    }
+
+    $roots += @(
+        "${env:ProgramFiles(x86)}\Steam",
+        "$env:ProgramFiles\Steam",
+        "C:\Steam",
+        "D:\Steam",
+        "E:\Steam"
+    )
+
+    return @(
+        $roots |
+            Where-Object {
+                $_ -and (Test-Path -LiteralPath $_ -PathType Container)
+            } |
+            ForEach-Object {
+                (Get-Item -LiteralPath $_).FullName.TrimEnd("\")
+            } |
+            Select-Object -Unique
+    )
+}
+
+# ==========================================
+# Find Millennium plugins directory
+# ==========================================
+
+function Find-MillenniumPlugins {
+    param([string[]]$SteamRoots)
+
+    $found = @(
+        foreach ($root in $SteamRoots) {
+            $candidate = Join-Path $root "millennium\plugins"
+
+            if (Test-Path -LiteralPath $candidate -PathType Container) {
+                (Get-Item -LiteralPath $candidate).FullName
+            }
+        }
+    ) | Select-Object -Unique
+
+    if ($found.Count -eq 0) {
+        throw "ไม่พบโฟลเดอร์ Millennium plugins ใน Steam ที่ตรวจพบ กรุณาตรวจสอบตำแหน่งติดตั้ง"
+    }
+
+    if ($found.Count -gt 1) {
+        Write-Host "พบโฟลเดอร์ plugins หลายตำแหน่ง:" -ForegroundColor Yellow
+
+        for ($i = 0; $i -lt $found.Count; $i++) {
+            Write-Host "[$($i + 1)] $($found[$i])"
+        }
+
+        $selection = Read-Host "พิมพ์หมายเลขตำแหน่งที่ต้องการติดตั้ง"
+
+        $number = 0
+        if (
+            ![int]::TryParse($selection, [ref]$number) -or
+            $number -lt 1 -or
+            $number -gt $found.Count
+        ) {
+            throw "หมายเลขตำแหน่งไม่ถูกต้อง ยกเลิกการติดตั้งปลั๊กอิน"
+        }
+
+        return $found[$number - 1]
+    }
+
+    return $found[0]
+}
+
+# ==========================================
+# Main
+# ==========================================
 
 try {
     New-Item -ItemType Directory -Path $folder -Force | Out-Null
@@ -44,76 +169,55 @@ try {
     Write-Host "       License Manager Setup        " -ForegroundColor Cyan
     Write-Host "====================================" -ForegroundColor Cyan
 
-    # 1. ดาวน์โหลดทุกไฟล์
-    Download-File $steamToolUrl $steamToolPath
-    Download-File $millenniumUrl $millenniumPath
-    Download-File $pluginUrl $pluginPath
+    # 1. Download all required files
+    Download-File -Url $steamToolUrl -Destination $steamToolPath
+    Download-File -Url $millenniumUrl -Destination $millenniumPath
+    Download-File -Url $pluginUrl -Destination $pluginPath
 
-    # 2. ติดตั้ง SteamTool แบบแสดงหน้าต่าง
-    Start-VisibleInstaller $steamToolPath "SteamTool"
+    # 2. Run SteamTool installer
+    Start-VisibleInstaller -Path $steamToolPath -Name "SteamTool"
 
-    # 3. ติดตั้ง Millennium แบบแสดงหน้าต่าง
-    Start-VisibleInstaller $millenniumPath "Millennium"
+    # 3. Run Millennium installer
+    Start-VisibleInstaller -Path $millenniumPath -Name "Millennium"
 
-    # 4. ค้นหาโฟลเดอร์ Steam จาก Registry
-    $steamRoots = @()
-
-    $registryKeys = @(
-        "HKCU:\Software\Valve\Steam",
-        "HKLM:\SOFTWARE\WOW6432Node\Valve\Steam",
-        "HKLM:\SOFTWARE\Valve\Steam"
-    )
-
-    foreach ($key in $registryKeys) {
-        if (Test-Path $key) {
-            $p = Get-ItemProperty $key -ErrorAction SilentlyContinue
-            if ($p.SteamPath) {
-                $steamRoots += $p.SteamPath
-            }
-            if ($p.InstallPath) {
-                $steamRoots += $p.InstallPath
-            }
-        }
+    # 4. Validate plugin file
+    if (
+        !(Test-Path -LiteralPath $pluginPath -PathType Leaf) -or
+        (Get-Item -LiteralPath $pluginPath).Length -eq 0
+    ) {
+        throw "ไม่พบไฟล์ปลั๊กอิน หรือไฟล์มีขนาด 0 ไบต์"
     }
 
-    $steamRoots = @($steamRoots | Select-Object -Unique)
-    $pluginDirs = @()
+    # 5. Find Steam and Millennium plugin directory
+    $steamRoots = @(Get-SteamRoots)
 
-    foreach ($steamRoot in $steamRoots) {
-        $pluginDirs += (Join-Path $steamRoot "millennium\plugins")
-        $pluginDirs += (Join-Path $steamRoot "plugins")
-    }
-
-    # รองรับโฟลเดอร์ Millennium ใน LocalAppData
-    $localMillennium = Join-Path $env:LOCALAPPDATA "Millennium\plugins"
-    $pluginDirs += $localMillennium
-
-    $existingDirs = @(
-        $pluginDirs |
-        Select-Object -Unique |
-        Where-Object { Test-Path $_ -PathType Container }
-    )
-
-    if ($existingDirs.Count -eq 0) {
-        Write-Host ""
-        Write-Host "ไม่พบโฟลเดอร์ plugins ของ Millennium" -ForegroundColor Yellow
-        Write-Host "ดาวน์โหลดปลั๊กอินไว้ที่: $pluginPath"
-        Write-Host "โปรดตรวจสอบตำแหน่งติดตั้ง Millennium แล้วคัดลอกไฟล์ .star ด้วยตนเอง"
-    }
-    else {
-        # คัดลอกไปยังตำแหน่งที่พบ
-        foreach ($dir in $existingDirs) {
-            Copy-Item -Path $pluginPath `
-                -Destination (Join-Path $dir (Split-Path $pluginPath -Leaf)) `
-                -Force
-
-            Write-Host "คัดลอกปลั๊กอินไปที่ $dir สำเร็จ" -ForegroundColor Green
-        }
+    if ($steamRoots.Count -eq 0) {
+        throw "ไม่พบตำแหน่งติดตั้ง Steam จาก Registry หรือโฟลเดอร์มาตรฐาน"
     }
 
     Write-Host ""
-    Write-Host "ดำเนินการครบทุกขั้นตอนแล้ว" -ForegroundColor Green
-    Write-Host "หาก Millennium ยังไม่แสดงปลั๊กอิน ให้ปิดและเปิด Steam ใหม่"
+    Write-Host "ตำแหน่ง Steam ที่ตรวจพบ:" -ForegroundColor Cyan
+    $steamRoots | ForEach-Object { Write-Host " - $_" }
+
+    $pluginDir = Find-MillenniumPlugins -SteamRoots $steamRoots
+
+    Write-Host "โฟลเดอร์ปลั๊กอิน: $pluginDir" -ForegroundColor Green
+
+    # 6. Copy plugin
+    $destination = Join-Path $pluginDir "com.yun119boy.licensemanager.star"
+
+    Copy-Item -LiteralPath $pluginPath -Destination $destination -Force -ErrorAction Stop
+
+    if (
+        !(Test-Path -LiteralPath $destination -PathType Leaf) -or
+        (Get-Item -LiteralPath $destination).Length -eq 0
+    ) {
+        throw "คัดลอกไฟล์ปลั๊กอินไม่สำเร็จ"
+    }
+
+    Write-Host ""
+    Write-Host "ติดตั้งปลั๊กอินสำเร็จ!" -ForegroundColor Green
+    Write-Host "ตำแหน่ง: $destination"
 }
 catch {
     Write-Host ""
@@ -123,4 +227,3 @@ finally {
     Write-Host ""
     Read-Host "กด Enter เพื่อปิดหน้าต่าง"
 }
-```
