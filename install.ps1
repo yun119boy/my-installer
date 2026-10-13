@@ -117,6 +117,7 @@ function Get-SteamRoots {
 # Find Millennium plugins directory
 # ==========================================
 
+
 function Find-MillenniumPlugins {
     param([string[]]$SteamRoots)
 
@@ -128,10 +129,21 @@ function Find-MillenniumPlugins {
                 (Get-Item -LiteralPath $candidate).FullName
             }
         }
-    ) | Select-Object -Unique
+    )
+
+    # ตัดรายการซ้ำโดยไม่สนตัวพิมพ์เล็ก-ใหญ่
+    $uniqueFound = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+
+    foreach ($path in $found) {
+        [void]$uniqueFound.Add($path.TrimEnd("\"))
+    }
+
+    $found = @($uniqueFound)
 
     if ($found.Count -eq 0) {
-        throw "ไม่พบโฟลเดอร์ Millennium plugins ใน Steam ที่ตรวจพบ กรุณาตรวจสอบตำแหน่งติดตั้ง"
+        throw "ไม่พบโฟลเดอร์ Millennium plugins"
     }
 
     if ($found.Count -gt 1) {
@@ -149,7 +161,7 @@ function Find-MillenniumPlugins {
             $number -lt 1 -or
             $number -gt $found.Count
         ) {
-            throw "หมายเลขตำแหน่งไม่ถูกต้อง ยกเลิกการติดตั้งปลั๊กอิน"
+            throw "หมายเลขตำแหน่งไม่ถูกต้อง"
         }
 
         return $found[$number - 1]
