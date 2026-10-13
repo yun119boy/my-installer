@@ -1,6 +1,5 @@
 
 #Requires -Version 5.1
-
 $ErrorActionPreference = "Stop"
 
 # ==========================================
@@ -16,307 +15,279 @@ $pluginUrl = "https://github.com/yun119boy/my-installer/releases/download/v1.0/c
 $steamToolPath = Join-Path $folder "st-setup-1.8.30.exe"
 $millenniumPath = Join-Path $folder "MillenniumInstaller-Windows.exe"
 $pluginPath = Join-Path $folder "com.yun119boy.licensemanager.star"
+$pluginName = "com.yun119boy.licensemanager.star"
 
-# ตั้งค่า encoding สำหรับ PowerShell 5.1
 try {
-    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
-    $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
-} catch {}
+    # Use UTF-8 for console output where supported.
+    try {
+        [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+        $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    } catch {}
 
-# ==========================================
-# Helper: Download files
-# ==========================================
+    # ==========================================
+    # Download and validate a file
+    # ==========================================
 
-function Download-File {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Url,
+    function Download-File {
+        param(
+            [Parameter(Mandatory = $true)][string]$Url,
+            [Parameter(Mandatory = $true)][string]$Destination
+        )
 
-        [Parameter(Mandatory = $true)]
-        [string]$Destination
-    )
+        Write-Host ""
+        Write-Host "Downloading: $(Split-Path $Destination -Leaf)" -ForegroundColor Yellow
 
-    Write-Host ""
-    Write-Host "กำลังดาวน์โหลด $(Split-Path $Destination -Leaf)..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri $Url -OutFile $Destination -UseBasicParsing -ErrorAction Stop
 
-    Invoke-WebRequest `
-        -Uri $Url `
-        -OutFile $Destination `
-        -UseBasicParsing `
-        -ErrorAction Stop
+        if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) {
+            throw "Download failed: file not found."
+        }
 
-    if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) {
-        throw "ไม่พบไฟล์หลังดาวน์โหลด: $Destination"
+        if ((Get-Item -LiteralPath $Destination).Length -le 0) {
+            throw "Download failed: file is empty."
+        }
+
+        Write-Host "Download complete." -ForegroundColor Green
     }
 
-    $file = Get-Item -LiteralPath $Destination
+    # ==========================================
+    # Run an installer and wait for it to exit
+    # ==========================================
 
-    if ($file.Length -le 0) {
-        throw "ไฟล์ที่ดาวน์โหลดมีขนาด 0 ไบต์: $Destination"
+    function Start-VisibleInstaller {
+        param(
+            [Parameter(Mandatory = $true)][string]$Path,
+            [Parameter(Mandatory = $true)][string]$Name
+        )
+
+        if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+            throw "Installer not found: $Name"
+        }
+
+        Write-Host ""
+        Write-Host "Starting $Name..." -ForegroundColor Cyan
+        Write-Host "Complete the installation in its window."
+
+        $process = Start-Process -FilePath $Path -Wait -PassThru
+
+        if ($process.ExitCode -ne 0) {
+            throw "$Name exited with code $($process.ExitCode)."
+        }
+
+        Write-Host "$Name installer has closed." -ForegroundColor Green
     }
 
-    Write-Host "ดาวน์โหลดสำเร็จ: $($file.Name)" -ForegroundColor Green
-}
+    # ==========================================
+    # Discover Steam installation directories
+    # ==========================================
 
-# ==========================================
-# Helper: Run installer and wait
-# ==========================================
+    function Get-SteamRoots {
+        $candidates = New-Object 'System.Collections.Generic.List[string]'
 
-function Start-VisibleInstaller {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path,
+        $registryPaths = @(
+            "HKCU:\Software\Valve\Steam",
+            "HKLM:\SOFTWARE\WOW6432Node\Valve\Steam",
+            "HKLM:\SOFTWARE\Valve\Steam"
+        )
 
-        [Parameter(Mandatory = $true)]
-        [string]$Name
-    )
+        foreach ($registryPath in $registryPaths) {
+            if (Test-Path -LiteralPath $registryPath) {
+                $reg = Get-ItemProperty -LiteralPath $registryPath -ErrorAction SilentlyContinue
 
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        throw "ไม่พบตัวติดตั้ง ${Name}: $Path"
-    }
+                if ($null -ne $reg) {
+                    foreach ($property in @("SteamPath", "InstallPath")) {
+                        $value = $reg.$property
 
-    Write-Host ""
-    Write-Host "กำลังเปิดตัวติดตั้ง $Name" -ForegroundColor Cyan
-    Write-Host "ทำตามขั้นตอนในหน้าต่างตัวติดตั้งให้เสร็จ"
-
-    $process = Start-Process -FilePath $Path -Wait -PassThru
-
-    if ($process.ExitCode -ne 0) {
-        throw "$Name ปิดด้วยรหัส $($process.ExitCode) กรุณาตรวจสอบการติดตั้ง"
-    }
-
-    Write-Host "$Name ปิดตัวติดตั้งแล้ว" -ForegroundColor Green
-}
-
-# ==========================================
-# Find Steam installation directories
-# ==========================================
-
-function Get-SteamRoots {
-    $roots = New-Object 'System.Collections.Generic.List[string]'
-
-    $registryPaths = @(
-        "HKCU:\Software\Valve\Steam",
-        "HKLM:\SOFTWARE\WOW6432Node\Valve\Steam",
-        "HKLM:\SOFTWARE\Valve\Steam"
-    )
-
-    foreach ($registryPath in $registryPaths) {
-        if (Test-Path -LiteralPath $registryPath) {
-            $reg = Get-ItemProperty `
-                -LiteralPath $registryPath `
-                -ErrorAction SilentlyContinue
-
-            if ($null -ne $reg) {
-                foreach ($valueName in @("SteamPath", "InstallPath")) {
-                    $value = $reg.$valueName
-
-                    if (-not [string]::IsNullOrWhiteSpace([string]$value)) {
-                        $roots.Add(([string]$value).Replace("/", "\"))
+                        if (-not [string]::IsNullOrWhiteSpace([string]$value)) {
+                            $candidates.Add(([string]$value).Replace("/", "\"))
+                        }
                     }
                 }
             }
         }
-    }
 
-    if ($env:ProgramFiles) {
-        $roots.Add((Join-Path $env:ProgramFiles "Steam"))
-    }
-
-    if (${env:ProgramFiles(x86)}) {
-        $roots.Add((Join-Path ${env:ProgramFiles(x86)} "Steam"))
-    }
-
-    $roots.Add("C:\Steam")
-    $roots.Add("D:\Steam")
-    $roots.Add("E:\Steam")
-
-    # Dictionary นี้ไม่แยกตัวพิมพ์เล็กและใหญ่
-    $unique = New-Object 'System.Collections.Generic.Dictionary[string,string]' (
-        [System.StringComparer]::OrdinalIgnoreCase
-    )
-
-    foreach ($root in $roots) {
-        if ([string]::IsNullOrWhiteSpace($root)) {
-            continue
+        if ($env:ProgramFiles) {
+            $candidates.Add((Join-Path $env:ProgramFiles "Steam"))
         }
 
-        if (Test-Path -LiteralPath $root -PathType Container) {
-            $fullPath = (Get-Item -LiteralPath $root).FullName.TrimEnd("\")
+        if (${env:ProgramFiles(x86)}) {
+            $candidates.Add((Join-Path ${env:ProgramFiles(x86)} "Steam"))
+        }
 
-            if (-not $unique.ContainsKey($fullPath)) {
-                $unique.Add($fullPath, $fullPath)
+        $candidates.Add("C:\Steam")
+        $candidates.Add("D:\Steam")
+        $candidates.Add("E:\Steam")
+
+        $seen = @{}
+        $result = New-Object 'System.Collections.Generic.List[string]'
+
+        foreach ($candidate in $candidates) {
+            if ([string]::IsNullOrWhiteSpace($candidate)) {
+                continue
+            }
+
+            if (Test-Path -LiteralPath $candidate -PathType Container) {
+                $fullPath = (Get-Item -LiteralPath $candidate).FullName.TrimEnd("\")
+
+                # Hashtable keys are case-insensitive by default.
+                if (-not $seen.ContainsKey($fullPath)) {
+                    $seen[$fullPath] = $true
+                    $result.Add($fullPath)
+                }
             }
         }
+
+        return @($result.ToArray())
     }
 
-    return @($unique.Values)
-}
+    # ==========================================
+    # Find Millennium plugins directory
+    # ==========================================
 
-# ==========================================
-# Find or prepare Millennium plugins directory
-# ==========================================
+    function Find-MillenniumPlugins {
+        param([Parameter(Mandatory = $true)][string[]]$SteamRoots)
 
-function Find-MillenniumPlugins {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string[]]$SteamRoots
-    )
+        $seen = @{}
+        $found = New-Object 'System.Collections.Generic.List[string]'
 
-    $unique = New-Object 'System.Collections.Generic.Dictionary[string,string]' (
-        [System.StringComparer]::OrdinalIgnoreCase
-    )
+        foreach ($root in $SteamRoots) {
+            $millenniumDir = Join-Path $root "millennium"
+            $pluginsDir = Join-Path $millenniumDir "plugins"
 
-    foreach ($root in $SteamRoots) {
-        $millenniumDir = Join-Path $root "millennium"
-        $candidate = Join-Path $millenniumDir "plugins"
+            # Do not create a guessed directory if Millennium itself is absent.
+            if (Test-Path -LiteralPath $pluginsDir -PathType Container) {
+                $fullPath = (Get-Item -LiteralPath $pluginsDir).FullName.TrimEnd("\")
 
-        # ใช้เฉพาะตำแหน่งที่มีโฟลเดอร์ Millennium จริง
-        if (Test-Path -LiteralPath $millenniumDir -PathType Container) {
-            if (-not (Test-Path -LiteralPath $candidate -PathType Container)) {
-                Write-Host "ไม่พบโฟลเดอร์ plugins กำลังสร้าง..." -ForegroundColor Yellow
-                New-Item -ItemType Directory -Path $candidate -Force | Out-Null
-            }
-
-            $fullPath = (Get-Item -LiteralPath $candidate).FullName.TrimEnd("\")
-
-            if (-not $unique.ContainsKey($fullPath)) {
-                $unique.Add($fullPath, $fullPath)
+                if (-not $seen.ContainsKey($fullPath)) {
+                    $seen[$fullPath] = $true
+                    $found.Add($fullPath)
+                }
             }
         }
+
+        if ($found.Count -eq 0) {
+            throw "Millennium plugins directory was not found. Check the Millennium installation path."
+        }
+
+        if ($found.Count -eq 1) {
+            return $found[0]
+        }
+
+        Write-Host ""
+        Write-Host "Multiple plugin directories were found:" -ForegroundColor Yellow
+
+        for ($i = 0; $i -lt $found.Count; $i++) {
+            Write-Host "[$($i + 1)] $($found[$i])"
+        }
+
+        $selection = Read-Host "Enter the number of the directory to use"
+        $number = 0
+
+        if (
+            -not [int]::TryParse($selection, [ref]$number) -or
+            $number -lt 1 -or
+            $number -gt $found.Count
+        ) {
+            throw "Invalid selection."
+        }
+
+        return $found[$number - 1]
     }
 
-    $found = @($unique.Values)
+    # ==========================================
+    # Main workflow
+    # ==========================================
 
-    if ($found.Count -eq 0) {
-        throw "ไม่พบโฟลเดอร์ Millennium ในตำแหน่ง Steam ที่ตรวจพบ กรุณาตรวจสอบว่าติดตั้ง Millennium สำเร็จแล้ว"
-    }
-
-    if ($found.Count -eq 1) {
-        return $found[0]
-    }
-
-    Write-Host ""
-    Write-Host "พบโฟลเดอร์ Millennium หลายตำแหน่ง:" -ForegroundColor Yellow
-
-    for ($i = 0; $i -lt $found.Count; $i++) {
-        Write-Host "[$($i + 1)] $($found[$i])"
-    }
-
-    $selection = Read-Host "เลือกหมายเลขตำแหน่งที่จะติดตั้ง"
-
-    $number = 0
-
-    if (
-        -not [int]::TryParse($selection, [ref]$number) -or
-        $number -lt 1 -or
-        $number -gt $found.Count
-    ) {
-        throw "หมายเลขไม่ถูกต้อง ยกเลิกการติดตั้ง"
-    }
-
-    return $found[$number - 1]
-}
-
-# ==========================================
-# Main
-# ==========================================
-
-try {
     New-Item -ItemType Directory -Path $folder -Force | Out-Null
 
-    Write-Host ""
     Write-Host "====================================" -ForegroundColor Cyan
     Write-Host "       License Manager Setup        " -ForegroundColor Cyan
     Write-Host "====================================" -ForegroundColor Cyan
 
-    # 1. Download files
+    # 1. Download all required files
     Download-File -Url $steamToolUrl -Destination $steamToolPath
     Download-File -Url $millenniumUrl -Destination $millenniumPath
     Download-File -Url $pluginUrl -Destination $pluginPath
 
-    # 2. Run installers one at a time
+    # 2. Run installers in order
     Start-VisibleInstaller -Path $steamToolPath -Name "SteamTool"
     Start-VisibleInstaller -Path $millenniumPath -Name "Millennium"
 
-    # 3. Ask user to open Steam
+    # 3. Ask the user to open Steam
     Write-Host ""
-    Write-Host "====================================" -ForegroundColor Cyan
-    Write-Host "          ขั้นตอนถัดไป              " -ForegroundColor Cyan
-    Write-Host "====================================" -ForegroundColor Cyan
-    Write-Host "1. เปิด Steam ด้วยตัวเอง"
-    Write-Host "2. รอให้ Steam เปิดเรียบร้อย"
-    Write-Host "3. กลับมาที่หน้าต่างนี้แล้วกด Enter"
+    Write-Host "NEXT STEP: Open Steam" -ForegroundColor Cyan
+    Write-Host "1. Open Steam manually."
+    Write-Host "2. Wait for Steam to finish starting."
+    Write-Host "3. Return here and press Enter."
 
-    Read-Host "เมื่อเปิด Steam แล้ว กด Enter เพื่อดำเนินการต่อ"
+    Read-Host "Press Enter after Steam is open"
 
     $steamProcess = Get-Process -Name "steam" -ErrorAction SilentlyContinue
 
     if (-not $steamProcess) {
-        throw "ยังไม่พบโปรเซส Steam กรุณาเปิด Steam แล้วรันสคริปต์อีกครั้ง"
+        throw "Steam is not running. Open Steam and run the installer again."
     }
 
-    Write-Host "ตรวจพบ Steam กำลังทำงาน" -ForegroundColor Green
+    Write-Host "Steam process detected." -ForegroundColor Green
 
-    # 4. Validate plugin file
+    # 4. Validate the plugin file
     if (-not (Test-Path -LiteralPath $pluginPath -PathType Leaf)) {
-        throw "ไม่พบไฟล์ปลั๊กอิน: $pluginPath"
+        throw "Plugin file not found."
     }
 
     if ((Get-Item -LiteralPath $pluginPath).Length -le 0) {
-        throw "ไฟล์ปลั๊กอินมีขนาด 0 ไบต์"
+        throw "Plugin file is empty."
     }
 
-    # 5. Find Steam
+    # 5. Discover Steam directories
     $steamRoots = @(Get-SteamRoots)
 
     if ($steamRoots.Count -eq 0) {
-        throw "ไม่พบตำแหน่งติดตั้ง Steam กรุณาตรวจสอบการติดตั้ง Steam"
+        throw "Steam installation directory was not found."
     }
 
     Write-Host ""
-    Write-Host "ตำแหน่ง Steam ที่ตรวจพบ:" -ForegroundColor Cyan
+    Write-Host "Detected Steam directories:" -ForegroundColor Cyan
 
     foreach ($root in $steamRoots) {
         Write-Host " - $root"
     }
 
-    # 6. Find Millennium plugins directory
+    # 6. Locate the actual plugins directory
     $pluginDir = Find-MillenniumPlugins -SteamRoots $steamRoots
 
-    Write-Host ""
-    Write-Host "โฟลเดอร์ปลั๊กอิน: $pluginDir" -ForegroundColor Green
+    Write-Host "Plugin directory: $pluginDir" -ForegroundColor Green
 
-    # 7. Copy plugin
-    $destination = Join-Path $pluginDir "com.yun119boy.licensemanager.star"
+    # 7. Copy and verify the plugin
+    $destination = Join-Path $pluginDir $pluginName
 
-    Copy-Item `
-        -LiteralPath $pluginPath `
-        -Destination $destination `
-        -Force `
-        -ErrorAction Stop
+    Copy-Item -LiteralPath $pluginPath -Destination $destination -Force -ErrorAction Stop
 
     if (-not (Test-Path -LiteralPath $destination -PathType Leaf)) {
-        throw "ไม่พบไฟล์ปลั๊กอินที่ปลายทางหลังคัดลอก"
+        throw "Plugin copy could not be verified."
     }
 
-    if ((Get-Item -LiteralPath $destination).Length -le 0) {
-        throw "ไฟล์ปลั๊กอินปลายทางมีขนาด 0 ไบต์"
+    $sourceLength = (Get-Item -LiteralPath $pluginPath).Length
+    $destinationLength = (Get-Item -LiteralPath $destination).Length
+
+    if ($sourceLength -ne $destinationLength -or $destinationLength -le 0) {
+        throw "Plugin verification failed: file sizes do not match."
     }
 
     Write-Host ""
     Write-Host "====================================" -ForegroundColor Green
-    Write-Host "       ติดตั้งปลั๊กอินสำเร็จ!       " -ForegroundColor Green
+    Write-Host "       Plugin installation complete" -ForegroundColor Green
     Write-Host "====================================" -ForegroundColor Green
-    Write-Host "ตำแหน่ง: $destination"
+    Write-Host "Destination: $destination"
+    Write-Host "File size verified: $destinationLength bytes"
 }
 catch {
     Write-Host ""
     Write-Host "====================================" -ForegroundColor Red
-    Write-Host "เกิดข้อผิดพลาด:" -ForegroundColor Red
+    Write-Host "INSTALLATION FAILED" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
 }
 finally {
     Write-Host ""
-    Read-Host "กด Enter เพื่อปิดหน้าต่าง"
+    Read-Host "Press Enter to close"
 }
