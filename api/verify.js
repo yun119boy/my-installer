@@ -62,7 +62,7 @@ module.exports = async function handler(req, res) {
         ? forwarded.split(",")[0].trim()
         : "unknown";
 
-    // ตรวจสอบ License และ Device ID ผ่าน RPC เดิม
+    // 1. ตรวจสอบ License ผ่าน RPC เดิม
     const verifyResponse = await fetch(
       `${supabaseUrl}/rest/v1/rpc/verify_license_device`,
       {
@@ -82,7 +82,7 @@ module.exports = async function handler(req, res) {
 
     if (!verifyResponse.ok) {
       console.error(
-        "License verification RPC failed:",
+        "License RPC failed:",
         verifyResponse.status
       );
 
@@ -92,10 +92,10 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const result = await verifyResponse.json();
-
-    // รองรับ RPC ที่คืนค่าเป็น Object หรือ Array ที่มี Object เดียว
-    const license = Array.isArray(result) ? result[0] : result;
+    const rpcResult = await verifyResponse.json();
+    const license = Array.isArray(rpcResult)
+      ? rpcResult[0]
+      : rpcResult;
 
     if (!license || license.valid !== true) {
       return res.status(200).json({
@@ -104,34 +104,76 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ต้องให้ RPC คืน filePath ซึ่งเป็น path จริงภายใน bucket
-    const filePath =
-      typeof license.filePath === "string"
-        ? license.filePath.trim()
-        : "";
+    // 2. ตรวจสอบว่า RPC ส่ง file_id กลับมาหรือไม่
+    const fileId =
+      license.file_id ??
+      license.fileId ??
+      license.file?.id ??
+      null;
 
-    const fileName =
-      typeof license.fileName === "string"
-        ? license.fileName.trim()
-        : "";
+    if (fileId === null || fileId === undefined) {
+      console.error("RPC response fields:", Object.keys(license));
 
-    if (!filePath || !fileName) {
+      return res.status(500).json({
+        valid: false,
+        message:
+          "RPC ตรวจคีย์ผ่าน แต่ไม่พบ file_id กรุณาตรวจสอบข้อมูล License",
+      });
+    }
+
+    // 3. ค้นหาข้อมูลไฟล์ในตาราง files
+    const fileQuery = new URL(
+      `${supabaseUrl}/rest/v1/files`
+    );
+
+    fileQuery.searchParams.set("select", "id,name,storage_path");
+    fileQuery.searchParams.set("id", `eq.${fileId}`);
+    fileQuery.searchParams.set("limit", "1");
+
+    const fileResponse = await fetch(fileQuery.toString(), {
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+      },
+    });
+
+    if (!fileResponse.ok) {
       console.error(
-        "License RPC response is missing filePath or fileName"
+        "File lookup failed:",
+        fileResponse.status
       );
 
       return res.status(500).json({
         valid: false,
-        message: "ข้อมูลไฟล์ของ License ไม่ครบ",
+        message: "ค้นหาข้อมูลไฟล์ไม่สำเร็จ",
       });
     }
 
-    // สร้าง Signed URL อายุ 5 นาทีจาก Supabase Storage
+    const files = await fileResponse.json();
+    const file = files[0];
+
+    if (
+      !file ||
+      typeof file.name !== "string" ||
+      typeof file.storage_path !== "string" ||
+      !file.storage_path.trim()
+    ) {
+      console.error("File record missing required fields");
+
+      return res.status(500).json({
+        valid: false,
+        message: "ไม่พบชื่อไฟล์หรือ Storage Path ในฐานข้อมูล",
+      });
+    }
+
+    // 4. สร้าง Signed URL จาก Storage
+    const storagePath = file.storage_path
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/");
+
     const signedResponse = await fetch(
-      `${supabaseUrl}/storage/v1/object/sign/installer-files/${filePath
-        .split("/")
-        .map(encodeURIComponent)
-        .join("/")}`,
+      `${supabaseUrl}/storage/v1/object/sign/installer-files/${storagePath}`,
       {
         method: "POST",
         headers: {
@@ -160,14 +202,10 @@ module.exports = async function handler(req, res) {
     const signedData = await signedResponse.json();
 
     const signedUrl =
-      typeof signedData.signedURL === "string"
-        ? signedData.signedURL
-        : typeof signedData.signedUrl === "string"
-          ? signedData.signedUrl
-          : "";
+      signedData.signedURL || signedData.signedUrl;
 
-    if (!signedUrl) {
-      console.error("Supabase did not return a signed URL");
+    if (typeof signedUrl !== "string" || !signedUrl) {
+      console.error("Signed URL missing from Storage response");
 
       return res.status(500).json({
         valid: false,
@@ -175,13 +213,15 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Supabase อาจส่ง signedURL เป็น path ที่ขึ้นต้นด้วย /
-    const downloadUrl = new URL(signedUrl, supabaseUrl).toString();
+    const downloadUrl = new URL(
+      signedUrl,
+      supabaseUrl
+    ).toString();
 
     return res.status(200).json({
       valid: true,
       downloadUrl,
-      fileName,
+      fileName: file.name,
     });
   } catch (error) {
     console.error(
