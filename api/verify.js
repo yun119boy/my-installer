@@ -62,8 +62,7 @@ module.exports = async function handler(req, res) {
         ? forwarded.split(",")[0].trim()
         : "unknown";
 
-    // 1. ตรวจสอบ License ผ่าน RPC เดิม
-    const verifyResponse = await fetch(
+    const rpcResponse = await fetch(
       `${supabaseUrl}/rest/v1/rpc/verify_license_device`,
       {
         method: "POST",
@@ -80,10 +79,10 @@ module.exports = async function handler(req, res) {
       }
     );
 
-    if (!verifyResponse.ok) {
+    if (!rpcResponse.ok) {
       console.error(
         "License RPC failed:",
-        verifyResponse.status
+        rpcResponse.status
       );
 
       return res.status(500).json({
@@ -92,136 +91,82 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const rpcResult = await verifyResponse.json();
-    const license = Array.isArray(rpcResult)
-      ? rpcResult[0]
-      : rpcResult;
+    const rawResult = await rpcResponse.json();
+    const result = Array.isArray(rawResult)
+      ? rawResult[0]
+      : rawResult;
 
-    if (!license || license.valid !== true) {
+    if (!result || result.valid !== true) {
       return res.status(200).json({
         valid: false,
-        message: license?.message || "คีย์ไม่ถูกต้อง",
+        message: result?.message || "คีย์ไม่ถูกต้อง",
       });
     }
 
-    // 2. ตรวจสอบว่า RPC ส่ง file_id กลับมาหรือไม่
-    const fileId =
-      license.file_id ??
-      license.fileId ??
-      license.file?.id ??
-      null;
+    const fileName =
+      typeof result.fileName === "string"
+        ? result.fileName.trim()
+        : "";
 
-    if (fileId === null || fileId === undefined) {
-      console.error("RPC response fields:", Object.keys(license));
+    const downloadUrl =
+      typeof result.downloadUrl === "string"
+        ? result.downloadUrl.trim()
+        : "";
+
+    if (!fileName || !downloadUrl) {
+      console.error("License RPC missing file information", {
+        fields: Object.keys(result),
+        hasFileName: Boolean(fileName),
+        hasDownloadUrl: Boolean(downloadUrl),
+      });
 
       return res.status(500).json({
         valid: false,
-        message:
-          "RPC ตรวจคีย์ผ่าน แต่ไม่พบ file_id กรุณาตรวจสอบข้อมูล License",
+        message: "ข้อมูลไฟล์ของ License ไม่ครบ",
       });
     }
 
-    // 3. ค้นหาข้อมูลไฟล์ในตาราง files
-    const fileQuery = new URL(
-      `${supabaseUrl}/rest/v1/files`
-    );
+    let parsedUrl;
 
-    fileQuery.searchParams.set("select", "id,name,storage_path");
-    fileQuery.searchParams.set("id", `eq.${fileId}`);
-    fileQuery.searchParams.set("limit", "1");
-
-    const fileResponse = await fetch(fileQuery.toString(), {
-      headers: {
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
-      },
-    });
-
-    if (!fileResponse.ok) {
-      console.error(
-        "File lookup failed:",
-        fileResponse.status
-      );
+    try {
+      parsedUrl = new URL(downloadUrl);
+    } catch {
+      console.error("License RPC returned an invalid download URL");
 
       return res.status(500).json({
         valid: false,
-        message: "ค้นหาข้อมูลไฟล์ไม่สำเร็จ",
+        message: "URL ดาวน์โหลดจากฐานข้อมูลไม่ถูกต้อง",
       });
     }
 
-    const files = await fileResponse.json();
-    const file = files[0];
+    const allowedHosts = new Set([
+      "utvmdjprzzteltajqwzk.supabase.co",
+      "github.com",
+    ]);
 
     if (
-      !file ||
-      typeof file.name !== "string" ||
-      typeof file.storage_path !== "string" ||
-      !file.storage_path.trim()
+      parsedUrl.protocol !== "https:" ||
+      !allowedHosts.has(parsedUrl.hostname) ||
+      parsedUrl.username ||
+      parsedUrl.password
     ) {
-      console.error("File record missing required fields");
+      console.error("Download URL failed validation", {
+        protocol: parsedUrl.protocol,
+        hostname: parsedUrl.hostname,
+      });
 
       return res.status(500).json({
         valid: false,
-        message: "ไม่พบชื่อไฟล์หรือ Storage Path ในฐานข้อมูล",
+        message: "URL ดาวน์โหลดไม่ตรงกับแหล่งไฟล์ที่อนุญาต",
       });
     }
-
-    // 4. สร้าง Signed URL จาก Storage
-    const storagePath = file.storage_path
-      .split("/")
-      .map(encodeURIComponent)
-      .join("/");
-
-    const signedResponse = await fetch(
-      `${supabaseUrl}/storage/v1/object/sign/installer-files/${storagePath}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: serviceKey,
-          Authorization: `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({
-          expiresIn: 300,
-        }),
-      }
-    );
-
-    if (!signedResponse.ok) {
-      console.error(
-        "Signed URL creation failed:",
-        signedResponse.status
-      );
-
-      return res.status(500).json({
-        valid: false,
-        message: "สร้าง URL ดาวน์โหลดไม่สำเร็จ",
-      });
-    }
-
-    const signedData = await signedResponse.json();
-
-    const signedUrl =
-      signedData.signedURL || signedData.signedUrl;
-
-    if (typeof signedUrl !== "string" || !signedUrl) {
-      console.error("Signed URL missing from Storage response");
-
-      return res.status(500).json({
-        valid: false,
-        message: "เซิร์ฟเวอร์ไม่ได้รับ URL ดาวน์โหลด",
-      });
-    }
-
-    const downloadUrl = new URL(
-      signedUrl,
-      supabaseUrl
-    ).toString();
 
     return res.status(200).json({
       valid: true,
+      message: result.message || "ตรวจสอบคีย์สำเร็จ",
+      fileName,
       downloadUrl,
-      fileName: file.name,
+      useNumber: result.useNumber,
     });
   } catch (error) {
     console.error(
