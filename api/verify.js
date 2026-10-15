@@ -259,7 +259,7 @@ module.exports = async function handler(req, res) {
           Authorization: `Bearer ${serviceKey}`,
         },
         body: JSON.stringify({
-          expiresIn: 300,
+          expiresIn: 86400,
         }),
       }
     );
