@@ -2,248 +2,147 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Installer Admin</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Installer Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script>
 
-    <style>
-        * { box-sizing: border-box; }
-
-        :root {
-            color-scheme: dark;
-            --bg: #0b1120;
-            --panel: #151f32;
-            --panel2: #202d43;
-            --text: #f1f5f9;
-            --muted: #a7b4c8;
-            --accent: #60a5fa;
-            --border: #334155;
-            --danger: #f87171;
-            --success: #4ade80;
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            background: var(--bg);
-            color: var(--text);
-            font-family: Arial, sans-serif;
-        }
-
-        button, input, select { font: inherit; }
-        button {
-            padding: 12px 16px;
-            border: 0;
-            border-radius: 8px;
-            background: #2563eb;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        button:hover { filter: brightness(1.12); }
-        button:disabled { opacity: .55; cursor: wait; }
-        button.secondary { background: #475569; }
-        button.danger { background: #b91c1c; }
-
-        input, select {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            background: #0f172a;
-            color: white;
-        }
-
-        label {
-            display: block;
-            margin: 15px 0 7px;
-            color: var(--muted);
-        }
-
-        a { color: var(--accent); overflow-wrap: anywhere; }
-
-        #loginPage {
-            width: min(400px, calc(100% - 32px));
-            padding: 28px;
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        #loginPage h1 { text-align: center; }
-        #loginForm button { width: 100%; margin-top: 22px; }
-        #message { margin-top: 15px; overflow-wrap: anywhere; }
-
-        #dashboard { display: none; }
-
-        header {
-            padding: 18px 24px;
-            background: var(--panel);
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 15px;
-        }
-
-        header h1 { margin: 0; font-size: 22px; }
-        #logoutButton { width: auto; }
-
-        .container {
-            max-width: 1200px;
-            margin: 30px auto;
-            padding: 0 18px 50px;
-        }
-
-        .cards {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 16px;
-        }
-
-        .card, .section {
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 22px;
-        }
-
-        .card h2 { margin: 0 0 12px; font-size: 16px; color: var(--muted); }
-        .number { font-size: 36px; font-weight: bold; }
-
-        .section { margin-top: 22px; }
-        .section h2 { margin-top: 0; }
-        .muted { color: var(--muted); }
-        .small { font-size: 13px; }
-        .row { display: flex; gap: 10px; flex-wrap: wrap; }
-        .row > * { flex: 1; min-width: 140px; }
-        .item {
-            padding: 15px;
-            margin-top: 10px;
-            background: var(--panel2);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            overflow-wrap: anywhere;
-        }
-        .item strong { overflow-wrap: anywhere; }
-        .item-line { margin-top: 7px; color: var(--muted); }
-        .item-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-        .item-actions button { width: auto; }
-        .status { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 12px; }
-        .success { color: var(--success); }
-        .error { color: var(--danger); }
-        hr { border: 0; border-top: 1px solid var(--border); margin: 24px 0; }
-
-        @media (max-width: 700px) {
-            .cards { grid-template-columns: 1fr; }
-            header { padding: 15px; }
-            header h1 { font-size: 18px; }
-            .container { margin-top: 18px; }
-            .card, .section { padding: 17px; }
-        }
-    </style>
+<style>
+*{box-sizing:border-box}
+:root{
+ color-scheme:dark;
+ --bg:#0b1120;--panel:#151f32;--panel2:#202d43;
+ --text:#f1f5f9;--muted:#a7b4c8;--accent:#60a5fa;
+ --border:#334155;--danger:#f87171;--success:#4ade80
+}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:Arial,sans-serif}
+button,input,select{font:inherit}
+button{padding:12px 16px;border:0;border-radius:8px;background:#2563eb;color:white;font-weight:bold;cursor:pointer}
+button:hover{filter:brightness(1.12)}
+button:disabled{opacity:.55;cursor:wait}
+button.secondary{background:#475569}
+input,select{width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;background:#0f172a;color:white}
+label{display:block;margin:15px 0 7px;color:var(--muted)}
+a{color:var(--accent);overflow-wrap:anywhere}
+#loginPage{width:min(400px,calc(100% - 32px));padding:28px;background:var(--panel);border:1px solid var(--border);border-radius:16px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+#loginPage h1{text-align:center}
+#loginForm button{width:100%;margin-top:22px}
+#message{margin-top:15px;overflow-wrap:anywhere}
+#dashboard{display:none}
+header{padding:18px 24px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:15px}
+header h1{margin:0;font-size:22px}
+#logoutButton{width:auto}
+.container{max-width:1200px;margin:30px auto;padding:0 18px 50px}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.card,.section{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px}
+.card h2{margin:0 0 12px;font-size:16px;color:var(--muted)}
+.number{font-size:36px;font-weight:bold}
+.section{margin-top:22px}
+.section h2{margin-top:0}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.item{padding:15px;margin-top:10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;overflow-wrap:anywhere}
+.item strong{overflow-wrap:anywhere}
+.item-line{margin-top:7px;color:var(--muted)}
+.item-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.item-actions button{width:auto}
+.status{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:12px}
+.success{color:var(--success)}
+.error{color:var(--danger)}
+hr{border:0;border-top:1px solid var(--border);margin:24px 0}
+@media(max-width:700px){
+ .cards{grid-template-columns:1fr}
+ header{padding:15px}
+ header h1{font-size:18px}
+ .container{margin-top:18px}
+ .card,.section{padding:17px}
+}
+</style>
 </head>
 
 <body>
 <div id="loginPage">
-    <h1>Admin Login</h1>
-    <form id="loginForm">
-        <label for="email">Email</label>
-        <input type="email" id="email" autocomplete="username" required>
-
-        <label for="password">Password</label>
-        <input type="password" id="password" autocomplete="current-password" required>
-
-        <button id="loginButton" type="submit">เข้าสู่ระบบ</button>
-    </form>
-    <div id="message" role="status"></div>
+ <h1>Admin Login</h1>
+ <form id="loginForm">
+  <label for="email">Email</label>
+  <input type="email" id="email" autocomplete="username" required>
+  <label for="password">Password</label>
+  <input type="password" id="password" autocomplete="current-password" required>
+  <button id="loginButton" type="submit">เข้าสู่ระบบ</button>
+ </form>
+ <div id="message" role="status"></div>
 </div>
 
 <div id="dashboard">
-    <header>
-        <h1>My Installer Admin</h1>
-        <button id="logoutButton" class="secondary">ออกจากระบบ</button>
-    </header>
+ <header>
+  <h1>My Installer Admin</h1>
+  <button id="logoutButton" class="secondary">ออกจากระบบ</button>
+ </header>
 
-    <main class="container">
-        <div class="cards">
-            <div class="card">
-                <h2>📁 Files</h2>
-                <div class="number" id="fileCount">0</div>
-            </div>
-            <div class="card">
-                <h2>🔑 Keys</h2>
-                <div class="number" id="keyCount">0</div>
-            </div>
-            <div class="card">
-                <h2>📊 Usage</h2>
-                <div class="number" id="usageCount">0</div>
-            </div>
-        </div>
+ <main class="container">
+  <div class="cards">
+   <div class="card"><h2>📁 Files</h2><div class="number" id="fileCount">0</div></div>
+   <div class="card"><h2>🔑 Keys</h2><div class="number" id="keyCount">0</div></div>
+   <div class="card"><h2>📊 Usage</h2><div class="number" id="usageCount">0</div></div>
+  </div>
 
-        <section class="section">
-            <h2>📤 อัปโหลดไฟล์</h2>
-            <p class="muted">
-                เลือกหลายไฟล์พร้อมกัน หรือเลือกทั้งโฟลเดอร์
-                ไฟล์จะถูกเก็บใน Private Bucket
-            </p>
+  <section class="section">
+   <h2>📤 อัปโหลดไฟล์</h2>
+   <p class="muted">เลือกหลายไฟล์พร้อมกัน หรือเลือกทั้งโฟลเดอร์ ไฟล์จะถูกเก็บใน Private Bucket</p>
 
-            <label for="uploadFiles">เลือกไฟล์</label>
-            <input type="file" id="uploadFiles" multiple>
+   <label for="uploadFiles">เลือกไฟล์</label>
+   <input type="file" id="uploadFiles" multiple>
 
-            <label for="uploadFolder">เลือกโฟลเดอร์</label>
-            <input type="file" id="uploadFolder" multiple webkitdirectory>
+   <label for="uploadFolder">เลือกโฟลเดอร์</label>
+   <input type="file" id="uploadFolder" multiple webkitdirectory>
 
-            <button id="uploadButton" type="button" style="margin-top:16px"
-                onclick="uploadSelectedFiles()">อัปโหลดที่เลือก</button>
-            <div id="uploadProgress" class="status" role="status"></div>
+   <label for="uploadDisplayName">ชื่อที่แสดงบนเว็บไซต์ (ไม่บังคับ)</label>
+   <input type="text" id="uploadDisplayName" maxlength="200" placeholder="เช่น SteamTool เวอร์ชันล่าสุด">
+   <p class="muted small">ชื่อที่กรอกใช้แสดงบนเว็บไซต์เท่านั้น ไม่เปลี่ยนชื่อไฟล์จริง หากอัปโหลดหลายไฟล์ ชื่อนี้จะใช้กับทุกรายการ</p>
 
-            <hr>
+   <button id="uploadButton" type="button" style="margin-top:16px" onclick="uploadSelectedFiles()">อัปโหลดที่เลือก</button>
+   <div id="uploadProgress" class="status" role="status"></div>
 
-            <h3>เพิ่ม URL ภายนอก</h3>
-            <p class="muted small">
-                สำหรับไฟล์ที่มี URL อยู่แล้ว รายการประเภทนี้จะไม่ถูกอัปโหลดเข้า Storage
-            </p>
-            <label for="fileName">ชื่อไฟล์</label>
-            <input type="text" id="fileName" placeholder="เช่น st.exe">
+   <hr>
+   <h3>เพิ่ม URL ภายนอก</h3>
+   <p class="muted small">สำหรับไฟล์ที่มี URL อยู่แล้ว จะไม่อัปโหลดเข้า Storage</p>
 
-            <label for="fileUrl">URL ของไฟล์</label>
-            <input type="url" id="fileUrl" placeholder="https://example.com/file.exe">
+   <label for="fileName">ชื่อไฟล์จริง</label>
+   <input type="text" id="fileName" placeholder="เช่น st-setup-1.8.30.exe">
 
-            <button type="button" style="margin-top:16px" onclick="addFile()">เพิ่ม URL</button>
+   <label for="fileUrl">URL ของไฟล์</label>
+   <input type="url" id="fileUrl" placeholder="https://example.com/file.exe">
 
-            <h3 style="margin-top:28px">รายการไฟล์</h3>
-            <button class="secondary" type="button" onclick="loadFiles()">รีเฟรชรายการ</button>
-            <div id="fileList" style="margin-top:12px">กำลังโหลด...</div>
-        </section>
+   <label for="externalDisplayName">ชื่อที่แสดงบนเว็บไซต์ (ไม่บังคับ)</label>
+   <input type="text" id="externalDisplayName" maxlength="200" placeholder="เช่น SteamTool เวอร์ชันล่าสุด">
 
-        <section class="section">
-            <h2>🔑 Key Management</h2>
-            <label for="keyFile">เลือกไฟล์ที่ต้องการผูกกับ Key</label>
-            <select id="keyFile">
-                <option value="">กำลังโหลดไฟล์...</option>
-            </select>
-            <button type="button" style="margin-top:16px" onclick="generateKey()">Generate Key</button>
-            <div id="generatedKey" class="item" style="display:none"></div>
-        </section>
+   <button type="button" style="margin-top:16px" onclick="addFile()">เพิ่ม URL</button>
 
-        <section class="section">
-            <h2>🔑 Generated Keys</h2>
-            <button class="secondary" type="button" onclick="loadKeys()">รีเฟรช Keys</button>
-            <div id="keyList" style="margin-top:12px">กำลังโหลด...</div>
-        </section>
+   <h3 style="margin-top:28px">รายการไฟล์</h3>
+   <button class="secondary" type="button" onclick="loadFiles()">รีเฟรชรายการ</button>
+   <div id="fileList" style="margin-top:12px">กำลังโหลด...</div>
+  </section>
 
-        <section class="section">
-            <h2>📊 Usage History</h2>
-            <button class="secondary" type="button" onclick="loadUsageHistory()">รีเฟรชประวัติ</button>
-            <div id="usageHistory" style="margin-top:12px">กำลังโหลดประวัติ...</div>
-        </section>
-    </main>
+  <section class="section">
+   <h2>🔑 Key Management</h2>
+   <label for="keyFile">เลือกไฟล์ที่ต้องการผูกกับ Key</label>
+   <select id="keyFile"><option value="">กำลังโหลดไฟล์...</option></select>
+   <button type="button" style="margin-top:16px" onclick="generateKey()">Generate Key</button>
+   <div id="generatedKey" class="item" style="display:none"></div>
+  </section>
+
+  <section class="section">
+   <h2>🔑 Generated Keys</h2>
+   <button class="secondary" type="button" onclick="loadKeys()">รีเฟรช Keys</button>
+   <div id="keyList" style="margin-top:12px">กำลังโหลด...</div>
+  </section>
+
+  <section class="section">
+   <h2>📊 Usage History</h2>
+   <button class="secondary" type="button" onclick="loadUsageHistory()">รีเฟรชประวัติ</button>
+   <div id="usageHistory" style="margin-top:12px">กำลังโหลดประวัติ...</div>
+  </section>
+ </main>
 </div>
 
 <script>
@@ -254,512 +153,483 @@ const SUPABASE_KEY = "sb_publishable_mjYpjIrSO72sJ31rVNtaEw_ggT889Mz";
 const STORAGE_BUCKET = "installer-files";
 const SIGNED_URL_SECONDS = 300;
 
-const supabaseClient = window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_KEY
-);
-
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
 
-function setStatus(element, text, type = "") {
-    element.textContent = text;
-    element.className = "status " + type;
+function setStatus(element,text,type=""){
+ element.textContent=text;
+ element.className="status "+type;
 }
 
-function formatDate(value) {
-    if (!value) return "-";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime())
-        ? "-"
-        : date.toLocaleString("th-TH");
+function formatDate(value){
+ if(!value)return "-";
+ const date=new Date(value);
+ return Number.isNaN(date.getTime())?"-":date.toLocaleString("th-TH");
 }
 
-function makeElement(tag, text, className) {
-    const element = document.createElement(tag);
-    if (text !== undefined && text !== null) {
-        element.textContent = String(text);
-    }
-    if (className) element.className = className;
-    return element;
+function makeElement(tag,text,className){
+ const element=document.createElement(tag);
+ if(text!==undefined&&text!==null)element.textContent=String(text);
+ if(className)element.className=className;
+ return element;
 }
 
-function makeButton(text, callback, className = "secondary") {
-    const button = makeElement("button", text);
-    button.type = "button";
-    button.className = className;
-    button.addEventListener("click", callback);
-    return button;
+function makeButton(text,callback,className="secondary"){
+ const button=makeElement("button",text);
+ button.type="button";
+ button.className=className;
+ button.addEventListener("click",callback);
+ return button;
 }
 
-function addLine(parent, text) {
-    parent.appendChild(makeElement("div", text, "item-line"));
+function addLine(parent,text){
+ parent.appendChild(makeElement("div",text,"item-line"));
 }
 
-// ตรวจสอบ session
-async function checkSession() {
-    const { data, error } = await supabaseClient.auth.getSession();
-    if (error) {
-        $("message").textContent = "ตรวจสอบสถานะ Login ไม่สำเร็จ";
-        return;
-    }
-    if (data.session) {
-        showDashboard();
-    }
+function displayNameOf(file){
+ return file.display_name?.trim() || file.name || "ไม่มีชื่อ";
 }
 
-function showDashboard() {
-    $("loginPage").style.display = "none";
-    $("dashboard").style.display = "block";
-
-    loadFiles();
-    loadKeyFiles();
-    loadKeys();
-    loadStats();
-    loadUsageHistory();
+function isExternalUrl(value){
+ return typeof value==="string" && /^https?:\/\//i.test(value);
 }
 
-$("loginForm").addEventListener("submit", async event => {
-    event.preventDefault();
+async function checkSession(){
+ const {data,error}=await supabaseClient.auth.getSession();
+ if(error){
+  $("message").textContent="ตรวจสอบสถานะ Login ไม่สำเร็จ";
+  return;
+ }
+ if(data.session)showDashboard();
+}
 
-    const button = $("loginButton");
-    button.disabled = true;
-    $("message").textContent = "กำลังเข้าสู่ระบบ...";
+function showDashboard(){
+ $("loginPage").style.display="none";
+ $("dashboard").style.display="block";
+ loadFiles();
+ loadKeyFiles();
+ loadKeys();
+ loadStats();
+ loadUsageHistory();
+}
 
-    try {
-        const { error } = await supabaseClient.auth.signInWithPassword({
-            email: $("email").value.trim(),
-            password: $("password").value
-        });
+$("loginForm").addEventListener("submit",async event=>{
+ event.preventDefault();
+ const button=$("loginButton");
+ button.disabled=true;
+ $("message").textContent="กำลังเข้าสู่ระบบ...";
+ $("message").className="";
 
-        if (error) {
-            $("message").textContent = "เข้าสู่ระบบไม่สำเร็จ: " + error.message;
-            $("message").className = "error";
-            return;
-        }
-
-        $("message").textContent = "";
-        showDashboard();
-    } finally {
-        button.disabled = false;
-    }
+ try{
+  const {error}=await supabaseClient.auth.signInWithPassword({
+   email:$("email").value.trim(),
+   password:$("password").value
+  });
+  if(error){
+   $("message").textContent="เข้าสู่ระบบไม่สำเร็จ: "+error.message;
+   $("message").className="error";
+   return;
+  }
+  $("message").textContent="";
+  showDashboard();
+ }catch(error){
+  $("message").textContent="เกิดข้อผิดพลาด: "+error.message;
+  $("message").className="error";
+ }finally{
+  button.disabled=false;
+ }
 });
 
-$("logoutButton").addEventListener("click", async () => {
-    const { error } = await supabaseClient.auth.signOut();
-
-    if (error) {
-        alert("ออกจากระบบไม่สำเร็จ: " + error.message);
-        return;
-    }
-
-    $("dashboard").style.display = "none";
-    $("loginPage").style.display = "block";
-    $("password").value = "";
-    $("message").textContent = "";
+$("logoutButton").addEventListener("click",async()=>{
+ const {error}=await supabaseClient.auth.signOut();
+ if(error){
+  alert("ออกจากระบบไม่สำเร็จ: "+error.message);
+  return;
+ }
+ $("dashboard").style.display="none";
+ $("loginPage").style.display="block";
+ $("password").value="";
+ $("message").textContent="";
 });
 
-async function loadStats() {
-    const results = await Promise.all([
-        supabaseClient.from("files").select("id", { count: "exact", head: true }),
-        supabaseClient.from("keys").select("id", { count: "exact", head: true }),
-        supabaseClient.from("key_uses").select("id", { count: "exact", head: true })
-    ]);
-
-    const [filesResult, keysResult, usageResult] = results;
-
-    if (filesResult.error || keysResult.error || usageResult.error) {
-        console.error("โหลดสถิติไม่สำเร็จ", results);
-        return;
-    }
-
-    $("fileCount").textContent = filesResult.count ?? 0;
-    $("keyCount").textContent = keysResult.count ?? 0;
-    $("usageCount").textContent = usageResult.count ?? 0;
+async function loadStats(){
+ const results=await Promise.all([
+  supabaseClient.from("files").select("id",{count:"exact",head:true}),
+  supabaseClient.from("keys").select("id",{count:"exact",head:true}),
+  supabaseClient.from("key_uses").select("id",{count:"exact",head:true})
+ ]);
+ const [filesResult,keysResult,usageResult]=results;
+ if(filesResult.error||keysResult.error||usageResult.error){
+  console.error("โหลดสถิติไม่สำเร็จ",results);
+  return;
+ }
+ $("fileCount").textContent=filesResult.count??0;
+ $("keyCount").textContent=keysResult.count??0;
+ $("usageCount").textContent=usageResult.count??0;
 }
 
-// ถ้า storage_url เป็น URL เต็ม จะถือว่าเป็นรายการ URL ภายนอกเดิม
-// ถ้าเป็น path จะสร้าง signed URL สำหรับ Private Bucket
-function isExternalUrl(value) {
-    return typeof value === "string" && /^https?:\/\//i.test(value);
+async function getFileLink(file){
+ if(!file.storage_url)throw new Error("รายการนี้ไม่มี storage_url");
+ if(isExternalUrl(file.storage_url))return file.storage_url;
+
+ const {data,error}=await supabaseClient.storage
+  .from(STORAGE_BUCKET)
+  .createSignedUrl(file.storage_url,SIGNED_URL_SECONDS,{
+   download:file.name||true
+  });
+
+ if(error)throw error;
+ return data.signedUrl;
 }
 
-async function getFileLink(file) {
-    if (!file.storage_url) {
-        throw new Error("รายการนี้ไม่มี storage_url");
-    }
+// อัปโหลดไฟล์ โดยเก็บชื่อไฟล์จริงแยกจากชื่อแสดง
+async function uploadSelectedFiles(){
+ const filesInput=$("uploadFiles");
+ const folderInput=$("uploadFolder");
+ const button=$("uploadButton");
+ const progress=$("uploadProgress");
+ const displayName=$("uploadDisplayName").value.trim();
 
-    if (isExternalUrl(file.storage_url)) {
-        return file.storage_url;
-    }
+ const selected=[
+  ...Array.from(filesInput.files||[]).map(file=>({file,relativePath:file.name})),
+  ...Array.from(folderInput.files||[]).map(file=>({
+   file,relativePath:file.webkitRelativePath||file.name
+  }))
+ ];
 
-    const { data, error } = await supabaseClient.storage
-        .from(STORAGE_BUCKET)
-        .createSignedUrl(file.storage_url, SIGNED_URL_SECONDS, {
-            download: file.name || true
-        });
+ if(!selected.length){
+  alert("กรุณาเลือกไฟล์หรือโฟลเดอร์ก่อน");
+  return;
+ }
 
-    if (error) throw error;
-    return data.signedUrl;
-}
+ const unique=new Map();
+ for(const entry of selected){
+  const key=entry.relativePath+"|"+entry.file.size+"|"+entry.file.lastModified;
+  if(!unique.has(key))unique.set(key,entry);
+ }
+ const files=Array.from(unique.values());
 
-// อัปโหลดไฟล์จากเครื่อง
-async function uploadSelectedFiles() {
-    const filesInput = $("uploadFiles");
-    const folderInput = $("uploadFolder");
-    const button = $("uploadButton");
-    const progress = $("uploadProgress");
+ const {data:sessionData,error:sessionError}=await supabaseClient.auth.getSession();
+ if(sessionError||!sessionData.session){
+  alert("กรุณาเข้าสู่ระบบใหม่");
+  return;
+ }
 
-    const selected = [
-        ...Array.from(filesInput.files || []).map(file => ({
-            file,
-            relativePath: file.name
-        })),
-        ...Array.from(folderInput.files || []).map(file => ({
-            file,
-            relativePath: file.webkitRelativePath || file.name
-        }))
-    ];
+ button.disabled=true;
+ let success=0;
+ const errors=[];
 
-    if (!selected.length) {
-        alert("กรุณาเลือกไฟล์หรือโฟลเดอร์ก่อน");
-        return;
-    }
+ try{
+  for(let i=0;i<files.length;i++){
+   const {file,relativePath}=files[i];
+   setStatus(progress,`กำลังอัปโหลด ${i+1}/${files.length}\n${relativePath}`);
 
-    // ป้องกันอัปโหลดซ้ำจากการเลือกไฟล์ชุดเดียวกันในช่องทั้งสอง
-    const unique = new Map();
-    for (const entry of selected) {
-        const key = entry.relativePath + "|" + entry.file.size + "|" + entry.file.lastModified;
-        if (!unique.has(key)) unique.set(key, entry);
-    }
+   const safeParts=relativePath.split("/").map(part=>
+    part.replace(/[^\wก-๙ .()-]/g,"_")
+   );
+   const objectPath=crypto.randomUUID()+"/"+safeParts.join("/");
 
-    const files = Array.from(unique.values());
-    const { data: sessionData, error: sessionError } =
-        await supabaseClient.auth.getSession();
+   const {error:uploadError}=await supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .upload(objectPath,file,{
+     upsert:false,
+     contentType:file.type||"application/octet-stream"
+    });
 
-    if (sessionError || !sessionData.session) {
-        alert("กรุณาเข้าสู่ระบบใหม่");
-        return;
-    }
+   if(uploadError){
+    errors.push(`${relativePath}: อัปโหลดไม่สำเร็จ: ${uploadError.message}`);
+    continue;
+   }
 
-    button.disabled = true;
-    let success = 0;
-    const errors = [];
+   const {error:insertError}=await supabaseClient.from("files").insert({
+    name:relativePath,
+    display_name:displayName||null,
+    storage_url:objectPath
+   });
 
-    try {
-        for (let i = 0; i < files.length; i++) {
-            const { file, relativePath } = files[i];
-
-            setStatus(progress,
-                `กำลังอัปโหลด ${i + 1}/${files.length}\n${relativePath}`);
-
-            // ใช้ชื่อ object ที่ไม่ซ้ำ และเก็บโครงสร้างโฟลเดอร์ไว้
-            const safeParts = relativePath.split("/").map(part =>
-                part.replace(/[^\wก-๙ .()-]/g, "_")
-            );
-
-            const objectPath =
-                crypto.randomUUID() + "/" + safeParts.join("/");
-
-            const { error: uploadError } = await supabaseClient.storage
-                .from(STORAGE_BUCKET)
-                .upload(objectPath, file, {
-                    upsert: false,
-                    contentType: file.type || "application/octet-stream"
-                });
-
-            if (uploadError) {
-                errors.push(`${relativePath}: อัปโหลดไม่สำเร็จ: ${uploadError.message}`);
-                continue;
-            }
-
-            const { error: insertError } = await supabaseClient
-                .from("files")
-                .insert({
-                    name: relativePath,
-                    storage_url: objectPath
-                });
-
-            if (insertError) {
-                const { error: cleanupError } = await supabaseClient.storage
-                    .from(STORAGE_BUCKET)
-                    .remove([objectPath]);
-
-                errors.push(
-                    `${relativePath}: บันทึกตาราง files ไม่สำเร็จ: ${insertError.message}` +
-                    (cleanupError ? `; ลบไฟล์ที่อัปโหลดไว้ไม่สำเร็จ: ${cleanupError.message}` : "")
-                );
-                continue;
-            }
-
-            success++;
-        }
-    } catch (error) {
-        errors.push(error.message || "เกิดข้อผิดพลาดระหว่างอัปโหลด");
-    } finally {
-        button.disabled = false;
-        filesInput.value = "";
-        folderInput.value = "";
-    }
-
-    await Promise.all([loadFiles(), loadKeyFiles(), loadStats()]);
-
-    setStatus(
-        progress,
-        `เสร็จแล้ว: สำเร็จ ${success}/${files.length} ไฟล์` +
-        (errors.length ? "\n\nรายการที่ไม่สำเร็จ:\n" + errors.join("\n") : ""),
-        errors.length ? "error" : "success"
+   if(insertError){
+    const {error:cleanupError}=await supabaseClient.storage
+     .from(STORAGE_BUCKET).remove([objectPath]);
+    errors.push(
+     `${relativePath}: บันทึกตาราง files ไม่สำเร็จ: ${insertError.message}`+
+     (cleanupError?`; ลบไฟล์ที่อัปโหลดไว้ไม่สำเร็จ: ${cleanupError.message}`:"")
     );
+    continue;
+   }
+   success++;
+  }
+ }catch(error){
+  errors.push(error.message||"เกิดข้อผิดพลาดระหว่างอัปโหลด");
+ }finally{
+  button.disabled=false;
+  filesInput.value="";
+  folderInput.value="";
+ }
+
+ await Promise.all([loadFiles(),loadKeyFiles(),loadStats()]);
+ setStatus(
+  progress,
+  `เสร็จแล้ว: สำเร็จ ${success}/${files.length} ไฟล์`+
+  (errors.length?"\n\nรายการที่ไม่สำเร็จ:\n"+errors.join("\n"):""),
+  errors.length?"error":"success"
+ );
 }
 
-// เพิ่ม URL ภายนอกแบบเดิม
-async function addFile() {
-    const name = $("fileName").value.trim();
-    const url = $("fileUrl").value.trim();
+// เพิ่ม URL ภายนอก พร้อมชื่อแสดงแยกต่างหาก
+async function addFile(){
+ const name=$("fileName").value.trim();
+ const url=$("fileUrl").value.trim();
+ const displayName=$("externalDisplayName").value.trim();
 
-    if (!name || !url) {
-        alert("กรุณากรอกชื่อไฟล์และ URL");
-        return;
-    }
+ if(!name||!url){
+  alert("กรุณากรอกชื่อไฟล์จริงและ URL");
+  return;
+ }
 
-    let parsed;
-    try {
-        parsed = new URL(url);
-    } catch {
-        alert("URL ไม่ถูกต้อง");
-        return;
-    }
+ let parsed;
+ try{
+  parsed=new URL(url);
+ }catch{
+  alert("URL ไม่ถูกต้อง");
+  return;
+ }
 
-    if (!["http:", "https:"].includes(parsed.protocol)) {
-        alert("อนุญาตเฉพาะ URL ที่ขึ้นต้นด้วย http:// หรือ https://");
-        return;
-    }
+ if(!["http:","https:"].includes(parsed.protocol)){
+  alert("อนุญาตเฉพาะ URL ที่ขึ้นต้นด้วย http:// หรือ https://");
+  return;
+ }
 
-    const { error } = await supabaseClient.from("files").insert({
-        name,
-        storage_url: url
-    });
+ const {error}=await supabaseClient.from("files").insert({
+  name,
+  display_name:displayName||null,
+  storage_url:url
+ });
 
-    if (error) {
-        alert("เพิ่ม URL ไม่สำเร็จ: " + error.message);
-        console.error(error);
-        return;
-    }
+ if(error){
+  alert("เพิ่ม URL ไม่สำเร็จ: "+error.message);
+  console.error(error);
+  return;
+ }
 
-    $("fileName").value = "";
-    $("fileUrl").value = "";
-
-    alert("เพิ่ม URL สำเร็จ");
-    await Promise.all([loadFiles(), loadKeyFiles(), loadStats()]);
+ $("fileName").value="";
+ $("fileUrl").value="";
+ $("externalDisplayName").value="";
+ alert("เพิ่ม URL สำเร็จ");
+ await Promise.all([loadFiles(),loadKeyFiles(),loadStats()]);
 }
 
-// แสดงไฟล์ พร้อมเวลาและปุ่มเปิด/ดาวน์โหลด
-async function loadFiles() {
-    const container = $("fileList");
-    container.replaceChildren(makeElement("div", "กำลังโหลด..."));
+// รายการไฟล์แสดงชื่อที่ตั้งไว้ แต่ดาวน์โหลดยังใช้ชื่อจริง
+async function loadFiles(){
+ const container=$("fileList");
+ container.replaceChildren(makeElement("div","กำลังโหลด..."));
 
-    const { data, error } = await supabaseClient
-        .from("files")
-        .select("id, name, storage_url, created_at")
-        .order("created_at", { ascending: false });
+ const {data,error}=await supabaseClient.from("files")
+  .select("id,name,display_name,storage_url,created_at")
+  .order("created_at",{ascending:false});
 
-    container.replaceChildren();
+ container.replaceChildren();
 
-    if (error) {
-        container.textContent = "โหลดไฟล์ไม่สำเร็จ: " + error.message;
-        return;
-    }
+ if(error){
+  container.textContent="โหลดไฟล์ไม่สำเร็จ: "+error.message;
+  return;
+ }
+ if(!data||!data.length){
+  container.textContent="ยังไม่มีไฟล์";
+  return;
+ }
 
-    if (!data || !data.length) {
-        container.textContent = "ยังไม่มีไฟล์";
-        return;
-    }
+ for(const file of data){
+  const card=makeElement("div",null,"item");
+  card.appendChild(makeElement("strong",displayNameOf(file)));
 
-    for (const file of data) {
-        const card = makeElement("div", null, "item");
-        card.appendChild(makeElement("strong", file.name || "ไม่มีชื่อ"));
+  if(file.display_name?.trim()&&file.display_name.trim()!==file.name){
+   addLine(card,"ชื่อไฟล์จริง: "+(file.name||"-"));
+  }
 
-        addLine(card, "เพิ่มเมื่อ: " + formatDate(file.created_at));
-        addLine(card, isExternalUrl(file.storage_url)
-            ? "ประเภท: URL ภายนอก"
-            : "ประเภท: Supabase Private Storage");
+  addLine(card,"เพิ่มเมื่อ: "+formatDate(file.created_at));
+  addLine(card,isExternalUrl(file.storage_url)
+   ?"ประเภท: URL ภายนอก"
+   :"ประเภท: Supabase Private Storage");
 
-        const actions = makeElement("div", null, "item-actions");
-        const openButton = makeButton("เปิด / ดาวน์โหลด", async () => {
-            openButton.disabled = true;
-            try {
-                const link = await getFileLink(file);
-                window.open(link, "_blank", "noopener,noreferrer");
-            } catch (e) {
-                alert("เปิดไฟล์ไม่สำเร็จ: " + e.message);
-            } finally {
-                openButton.disabled = false;
-            }
-        });
-        actions.appendChild(openButton);
-        card.appendChild(actions);
-        container.appendChild(card);
-    }
+  const actions=makeElement("div",null,"item-actions");
+  const openButton=makeButton("เปิด / ดาวน์โหลด",async()=>{
+   openButton.disabled=true;
+   try{
+    const link=await getFileLink(file);
+    window.open(link,"_blank","noopener,noreferrer");
+   }catch(error){
+    alert("เปิดไฟล์ไม่สำเร็จ: "+error.message);
+   }finally{
+    openButton.disabled=false;
+   }
+  });
+  actions.appendChild(openButton);
+  card.appendChild(actions);
+  container.appendChild(card);
+ }
 }
 
-async function loadKeyFiles() {
-    const select = $("keyFile");
-    select.replaceChildren();
+// เมนูเลือกไฟล์สำหรับสร้าง Key ใช้ชื่อแสดง
+async function loadKeyFiles(){
+ const select=$("keyFile");
+ select.replaceChildren();
 
-    const { data, error } = await supabaseClient
-        .from("files")
-        .select("id, name")
-        .order("name");
+ const {data,error}=await supabaseClient.from("files")
+  .select("id,name,display_name")
+  .order("name");
 
-    if (error) {
-        select.add(new Option("โหลดไฟล์ไม่สำเร็จ", ""));
-        console.error(error);
-        return;
-    }
+ if(error){
+  select.add(new Option("โหลดไฟล์ไม่สำเร็จ",""));
+  console.error(error);
+  return;
+ }
+ if(!data||!data.length){
+  select.add(new Option("ยังไม่มีไฟล์",""));
+  return;
+ }
 
-    if (!data || !data.length) {
-        select.add(new Option("ยังไม่มีไฟล์", ""));
-        return;
-    }
-
-    select.add(new Option("-- เลือกไฟล์ --", ""));
-    data.forEach(file => select.add(new Option(file.name, file.id)));
+ select.add(new Option("-- เลือกไฟล์ --",""));
+ data.forEach(file=>{
+  select.add(new Option(displayNameOf(file),file.id));
+ });
 }
 
-function createRandomKey() {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let key = "";
-
-    for (let i = 0; i < 16; i++) {
-        if (i > 0 && i % 4 === 0) key += "-";
-        key += chars[Math.floor(Math.random() * chars.length)];
-    }
-
-    return key;
+function createRandomKey(){
+ const chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+ let key="";
+ for(let i=0;i<16;i++){
+  if(i>0&&i%4===0)key+="-";
+  key+=chars[Math.floor(Math.random()*chars.length)];
+ }
+ return key;
 }
 
-async function generateKey() {
-    const fileId = $("keyFile").value;
+async function generateKey(){
+ const fileId=$("keyFile").value;
+ if(!fileId){
+  alert("กรุณาเลือกไฟล์ก่อน");
+  return;
+ }
 
-    if (!fileId) {
-        alert("กรุณาเลือกไฟล์ก่อน");
-        return;
-    }
+ const keyCode=createRandomKey();
+ const {error}=await supabaseClient.from("keys").insert({
+  key_code:keyCode,
+  file_id:fileId,
+  status:"unused"
+ });
 
-    const keyCode = createRandomKey();
-    const { error } = await supabaseClient.from("keys").insert({
-        key_code: keyCode,
-        file_id: fileId,
-        status: "unused"
-    });
+ if(error){
+  alert("สร้าง Key ไม่สำเร็จ: "+error.message);
+  console.error(error);
+  return;
+ }
 
-    if (error) {
-        alert("สร้าง Key ไม่สำเร็จ: " + error.message);
-        console.error(error);
-        return;
-    }
+ const box=$("generatedKey");
+ box.replaceChildren();
+ box.style.display="block";
+ box.appendChild(makeElement("strong","สร้าง Key สำเร็จ"));
+ addLine(box,keyCode);
+ box.appendChild(makeButton("คัดลอก Key",async()=>{
+  try{
+   await navigator.clipboard.writeText(keyCode);
+   alert("คัดลอก Key แล้ว");
+  }catch{
+   alert("คัดลอกอัตโนมัติไม่ได้ กรุณาคัดลอกข้อความ Key ด้วยตนเอง");
+  }
+ }));
 
-    const box = $("generatedKey");
-    box.replaceChildren();
-    box.style.display = "block";
-    box.appendChild(makeElement("strong", "สร้าง Key สำเร็จ"));
-    addLine(box, keyCode);
-
-    box.appendChild(makeButton("คัดลอก Key", async () => {
-        try {
-            await navigator.clipboard.writeText(keyCode);
-            alert("คัดลอก Key แล้ว");
-        } catch {
-            alert("คัดลอกอัตโนมัติไม่ได้ กรุณาคัดลอกข้อความ Key ด้วยตนเอง");
-        }
-    }));
-
-    await Promise.all([loadKeys(), loadStats()]);
+ await Promise.all([loadKeys(),loadStats()]);
 }
 
-async function loadKeys() {
-    const container = $("keyList");
-    container.textContent = "กำลังโหลด...";
+// รายการ Keys แสดงชื่อที่แสดงของไฟล์
+async function loadKeys(){
+ const container=$("keyList");
+ container.textContent="กำลังโหลด...";
 
-    const { data, error } = await supabaseClient
-        .from("keys")
-        .select(`
-            id,
-            key_code,
-            status,
-            first_ip,
-            first_used_at,
-            created_at,
-            file_id,
-            files ( name )
-        `)
-        .order("created_at", { ascending: false });
+ const {data,error}=await supabaseClient.from("keys")
+  .select(`
+   id,
+   key_code,
+   status,
+   first_ip,
+   first_used_at,
+   created_at,
+   file_id,
+   files(name,display_name)
+  `)
+  .order("created_at",{ascending:false});
 
-    container.replaceChildren();
+ container.replaceChildren();
 
-    if (error) {
-        container.textContent = "โหลด Keys ไม่สำเร็จ: " + error.message;
-        console.error(error);
-        return;
-    }
+ if(error){
+  container.textContent="โหลด Keys ไม่สำเร็จ: "+error.message;
+  console.error(error);
+  return;
+ }
+ if(!data||!data.length){
+  container.textContent="ยังไม่มี Key";
+  return;
+ }
 
-    if (!data || !data.length) {
-        container.textContent = "ยังไม่มี Key";
-        return;
-    }
-
-    data.forEach(key => {
-        const card = makeElement("div", null, "item");
-        card.appendChild(makeElement("strong", key.key_code || "-"));
-        addLine(card, "ไฟล์: " + (key.files?.name || "ไม่ทราบไฟล์"));
-        addLine(card, "สถานะ: " + (key.status || "unused"));
-        addLine(card, "First IP: " + (key.first_ip || "-"));
-        addLine(card, "First Used: " + formatDate(key.first_used_at));
-        addLine(card, "สร้างเมื่อ: " + formatDate(key.created_at));
-        container.appendChild(card);
-    });
+ data.forEach(key=>{
+  const card=makeElement("div",null,"item");
+  card.appendChild(makeElement("strong",key.key_code||"-"));
+  addLine(card,"ไฟล์: "+displayNameOf(key.files||{}));
+  if(key.files?.display_name?.trim()&&key.files.display_name.trim()!==key.files.name){
+   addLine(card,"ชื่อไฟล์จริง: "+(key.files.name||"-"));
+  }
+  addLine(card,"สถานะ: "+(key.status||"unused"));
+  addLine(card,"First IP: "+(key.first_ip||"-"));
+  addLine(card,"First Used: "+formatDate(key.first_used_at));
+  addLine(card,"สร้างเมื่อ: "+formatDate(key.created_at));
+  container.appendChild(card);
+ });
 }
 
-async function loadUsageHistory() {
-    const container = $("usageHistory");
-    container.textContent = "กำลังโหลดประวัติ...";
+// ประวัติการใช้งานแสดงชื่อที่แสดงของไฟล์
+async function loadUsageHistory(){
+ const container=$("usageHistory");
+ container.textContent="กำลังโหลดประวัติ...";
 
-    const { data, error } = await supabaseClient
-        .from("key_uses")
-        .select(`
-            id,
-            ip_address,
-            use_number,
-            used_at,
-            keys (
-                key_code,
-                files ( name )
-            )
-        `)
-        .order("used_at", { ascending: false })
-        .limit(100);
+ const {data,error}=await supabaseClient.from("key_uses")
+  .select(`
+   id,
+   ip_address,
+   use_number,
+   used_at,
+   keys(
+    key_code,
+    files(name,display_name)
+   )
+  `)
+  .order("used_at",{ascending:false})
+  .limit(100);
 
-    container.replaceChildren();
+ container.replaceChildren();
 
-    if (error) {
-        container.textContent = "โหลดประวัติไม่สำเร็จ: " + error.message;
-        console.error(error);
-        return;
-    }
+ if(error){
+  container.textContent="โหลดประวัติไม่สำเร็จ: "+error.message;
+  console.error(error);
+  return;
+ }
+ if(!data||!data.length){
+  container.textContent="ยังไม่มีประวัติการใช้งาน";
+  return;
+ }
 
-    if (!data || !data.length) {
-        container.textContent = "ยังไม่มีประวัติการใช้งาน";
-        return;
-    }
-
-    data.forEach(item => {
-        const card = makeElement("div", null, "item");
-        addLine(card, "ไฟล์: " + (item.keys?.files?.name || "ไม่ทราบไฟล์"));
-        addLine(card, "Key: " + (item.keys?.key_code || "-"));
-        addLine(card, "IP: " + (item.ip_address || "-"));
-        addLine(card, "ครั้งที่: " + (item.use_number ?? "-"));
-        addLine(card, "เวลา: " + formatDate(item.used_at));
-        container.appendChild(card);
-    });
+ data.forEach(item=>{
+  const card=makeElement("div",null,"item");
+  const file=item.keys?.files;
+  addLine(card,"ไฟล์: "+displayNameOf(file||{}));
+  if(file?.display_name?.trim()&&file.display_name.trim()!==file.name){
+   addLine(card,"ชื่อไฟล์จริง: "+(file.name||"-"));
+  }
+  addLine(card,"Key: "+(item.keys?.key_code||"-"));
+  addLine(card,"IP: "+(item.ip_address||"-"));
+  addLine(card,"ครั้งที่: "+(item.use_number??"-"));
+  addLine(card,"เวลา: "+formatDate(item.used_at));
+  container.appendChild(card);
+ });
 }
 
 checkSession();
