@@ -1,4 +1,3 @@
-
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -24,6 +23,8 @@ module.exports = async function handler(req, res) {
   const maxFolderFiles = 500;
 
   if (!supabaseUrl || !serviceKey) {
+    console.error("[verify] Missing server configuration");
+
     return res.status(500).json({
       valid: false,
       message: "Server configuration missing",
@@ -121,7 +122,7 @@ module.exports = async function handler(req, res) {
         throw new Error("Invalid Storage URL path");
       }
 
-      // ใช้ Signed URL เดิมได้ถ้ายังมี token
+      // URL แบบ Signed URL ที่มี token อยู่แล้ว
       if (prefix === prefixes[2]) {
         if (!url.searchParams.has("token")) {
           throw new Error("Missing signed URL token");
@@ -143,6 +144,7 @@ module.exports = async function handler(req, res) {
 
     path = path.replace(/^\/+/, "");
 
+    // ป้องกันการใส่ชื่อ bucket ซ้ำใน path
     if (path.startsWith(`${bucket}/`)) {
       path = path.slice(bucket.length + 1);
     }
@@ -171,17 +173,17 @@ module.exports = async function handler(req, res) {
   }
 
   // สร้าง Signed URL อายุ 24 ชั่วโมง
-  // พร้อมบันทึก path ที่ใช้ หาก Supabase ปฏิเสธ
+  // เพิ่ม Log เพื่อช่วยหาสาเหตุ NoSuchKey
   async function createSignedUrl(storagePath) {
     const normalized = normalizeStoragePath(storagePath);
 
     if (normalized.existingSignedUrl) {
+      console.log("[verify] Existing signed URL provided");
       return normalized.existingSignedUrl;
     }
 
     const candidates = [normalized.path];
 
-    // รองรับกรณี path มีชื่อ bucket นำหน้า
     if (normalized.path.startsWith(`${bucket}/`)) {
       candidates.push(
         normalized.path.slice(bucket.length + 1)
@@ -198,6 +200,13 @@ module.exports = async function handler(req, res) {
         .split("/")
         .map((segment) => encodeURIComponent(segment))
         .join("/");
+
+      // Log เฉพาะ bucket และ path ไม่บันทึก Secret Key
+      console.log("[verify] Storage signing request:", {
+        bucket,
+        path: candidate,
+        encodedPath,
+      });
 
       const response = await fetch(
         `${supabaseUrl}/storage/v1/object/sign/${bucket}/${encodedPath}`,
@@ -218,7 +227,7 @@ module.exports = async function handler(req, res) {
         lastStatus = response.status;
         lastDetails = (await response.text()).slice(0, 300);
 
-        console.error("Signed URL attempt failed:", {
+        console.error("[verify] Signed URL attempt failed:", {
           status: lastStatus,
           path: candidate,
           details: lastDetails,
@@ -236,7 +245,7 @@ module.exports = async function handler(req, res) {
         lastStatus = response.status;
         lastDetails = "Supabase did not return signedURL";
 
-        console.error("Signed URL response invalid:", {
+        console.error("[verify] Signed URL response invalid:", {
           path: candidate,
           details: lastDetails,
         });
@@ -262,6 +271,11 @@ module.exports = async function handler(req, res) {
       ) {
         throw new Error("Invalid generated signed URL");
       }
+
+      console.log("[verify] Signed URL created successfully:", {
+        bucket,
+        path: candidate,
+      });
 
       return signedUrl.toString();
     }
@@ -299,7 +313,7 @@ module.exports = async function handler(req, res) {
 
     if (!rpcResponse.ok) {
       console.error(
-        "License RPC failed:",
+        "[verify] License RPC failed:",
         rpcResponse.status,
         (await rpcResponse.text()).slice(0, 300)
       );
@@ -336,6 +350,8 @@ module.exports = async function handler(req, res) {
           : "";
 
       if (!fileName || !downloadUrl) {
+        console.error("[verify] File license data missing");
+
         return res.status(500).json({
           valid: false,
           message: "ข้อมูลไฟล์ของ License ไม่ครบ",
@@ -372,6 +388,8 @@ module.exports = async function handler(req, res) {
         });
       }
 
+      console.log("[verify] Processing single-file license");
+
       const signedUrl = await createSignedUrl(downloadUrl);
 
       return res.status(200).json({
@@ -400,6 +418,8 @@ module.exports = async function handler(req, res) {
         ) ||
         !folderName
       ) {
+        console.error("[verify] Folder license data invalid");
+
         return res.status(500).json({
           valid: false,
           message: "ข้อมูลโฟลเดอร์ของ License ไม่ถูกต้อง",
@@ -415,11 +435,14 @@ module.exports = async function handler(req, res) {
         "folder_id",
         `eq.${folderId}`
       );
+
       queryUrl.searchParams.set(
         "select",
         "name,storage_path"
       );
+
       queryUrl.searchParams.set("order", "name.asc");
+
       queryUrl.searchParams.set(
         "limit",
         String(maxFolderFiles + 1)
@@ -438,7 +461,7 @@ module.exports = async function handler(req, res) {
 
       if (!filesResponse.ok) {
         console.error(
-          "Folder file query failed:",
+          "[verify] Folder file query failed:",
           filesResponse.status,
           (await filesResponse.text()).slice(0, 300)
         );
@@ -450,6 +473,13 @@ module.exports = async function handler(req, res) {
       }
 
       const folderFiles = await filesResponse.json();
+
+      console.log("[verify] Folder file records found:", {
+        folderId,
+        count: Array.isArray(folderFiles)
+          ? folderFiles.length
+          : 0,
+      });
 
       if (
         !Array.isArray(folderFiles) ||
@@ -490,6 +520,10 @@ module.exports = async function handler(req, res) {
           throw new Error("Invalid folder file record");
         }
 
+        console.log("[verify] Processing folder file:", {
+          name: file.name,
+        });
+
         const downloadUrl = await createSignedUrl(
           file.storage_path
         );
@@ -512,13 +546,15 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    console.error("[verify] Unsupported license type");
+
     return res.status(500).json({
       valid: false,
       message: "ประเภท License ไม่ถูกต้อง",
     });
   } catch (error) {
     console.error(
-      "License verification failed:",
+      "[verify] License verification failed:",
       error instanceof Error
         ? error.message
         : "Unknown error"
