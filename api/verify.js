@@ -1,3 +1,4 @@
+
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -24,7 +25,6 @@ module.exports = async function handler(req, res) {
 
   if (!supabaseUrl || !serviceKey) {
     console.error("[verify] Missing server configuration");
-
     return res.status(500).json({
       valid: false,
       message: "Server configuration missing",
@@ -122,18 +122,17 @@ module.exports = async function handler(req, res) {
         throw new Error("Invalid Storage URL path");
       }
 
-      // URL แบบ Signed URL ที่มี token อยู่แล้ว
+      // ไม่ใช้ Signed URL ที่หมดอายุหรือ token ไม่ถูกต้อง
+      // ให้สร้าง Signed URL ใหม่จาก object path แทน
       if (prefix === prefixes[2]) {
         if (!url.searchParams.has("token")) {
           throw new Error("Missing signed URL token");
         }
 
-        return {
-          existingSignedUrl: url.toString(),
-        };
+        path = url.pathname.slice(prefix.length);
+      } else {
+        path = url.pathname.slice(prefix.length);
       }
-
-      path = url.pathname.slice(prefix.length);
     }
 
     try {
@@ -144,7 +143,6 @@ module.exports = async function handler(req, res) {
 
     path = path.replace(/^\/+/, "");
 
-    // ป้องกันการใส่ชื่อ bucket ซ้ำใน path
     if (path.startsWith(`${bucket}/`)) {
       path = path.slice(bucket.length + 1);
     }
@@ -172,15 +170,85 @@ module.exports = async function handler(req, res) {
     };
   }
 
+  // แปลง signedURL ที่ Supabase ส่งกลับมาให้เป็น URL เต็ม
+  function normalizeSignedUrl(value) {
+    if (typeof value !== "string" || !value.trim()) {
+      throw new Error("Supabase returned an empty signed URL");
+    }
+
+    const raw = value.trim();
+    let signedUrl;
+
+    try {
+      if (/^https:\/\//i.test(raw)) {
+        signedUrl = new URL(raw);
+      } else {
+        // Supabase อาจส่งกลับมาเป็น:
+        // /object/sign/bucket/path?token=...
+        // /storage/v1/object/sign/bucket/path?token=...
+        const relative = raw.replace(/^\/+/, "");
+
+        if (relative.startsWith("storage/v1/")) {
+          signedUrl = new URL(relative, `${supabaseUrl}/`);
+        } else if (relative.startsWith("object/sign/")) {
+          signedUrl = new URL(
+            `storage/v1/${relative}`,
+            `${supabaseUrl}/`
+          );
+        } else {
+          throw new Error("Unexpected signed URL path format");
+        }
+      }
+    } catch (error) {
+      console.error("[verify] Signed URL parsing failed:", {
+        reason:
+          error instanceof Error
+            ? error.message
+            : "Unknown parsing error",
+      });
+
+      throw new Error("Unable to parse generated signed URL");
+    }
+
+    console.log("[verify] Signed URL validation:", {
+      protocol: signedUrl.protocol,
+      hostname: signedUrl.hostname,
+      pathname: signedUrl.pathname,
+      hasToken: signedUrl.searchParams.has("token"),
+    });
+
+    const pathPrefix =
+      `/storage/v1/object/sign/${bucket}/`;
+
+    const valid =
+      signedUrl.protocol === "https:" &&
+      signedUrl.hostname === allowedHost &&
+      !signedUrl.username &&
+      !signedUrl.password &&
+      !signedUrl.port &&
+      signedUrl.pathname.startsWith(pathPrefix) &&
+      signedUrl.searchParams.has("token");
+
+    if (!valid) {
+      console.error("[verify] Signed URL validation failed:", {
+        protocolValid: signedUrl.protocol === "https:",
+        hostnameValid: signedUrl.hostname === allowedHost,
+        usernamePresent: Boolean(signedUrl.username),
+        passwordPresent: Boolean(signedUrl.password),
+        portPresent: Boolean(signedUrl.port),
+        pathValid: signedUrl.pathname.startsWith(pathPrefix),
+        hasToken: signedUrl.searchParams.has("token"),
+      });
+
+      throw new Error("Invalid generated signed URL");
+    }
+
+    return signedUrl.toString();
+  }
+
   // สร้าง Signed URL อายุ 24 ชั่วโมง
-  // เพิ่ม Log เพื่อช่วยหาสาเหตุ NoSuchKey
   async function createSignedUrl(storagePath) {
     const normalized = normalizeStoragePath(storagePath);
-
-    if (normalized.existingSignedUrl) {
-      console.log("[verify] Existing signed URL provided");
-      return normalized.existingSignedUrl;
-    }
 
     const candidates = [normalized.path];
 
@@ -201,7 +269,6 @@ module.exports = async function handler(req, res) {
         .map((segment) => encodeURIComponent(segment))
         .join("/");
 
-      // Log เฉพาะ bucket และ path ไม่บันทึก Secret Key
       console.log("[verify] Storage signing request:", {
         bucket,
         path: candidate,
@@ -253,31 +320,15 @@ module.exports = async function handler(req, res) {
         continue;
       }
 
-      const signedUrl = new URL(
-        data.signedURL,
-        `${supabaseUrl}/storage/v1/`
-      );
-
-      if (
-        signedUrl.protocol !== "https:" ||
-        signedUrl.hostname !== allowedHost ||
-        signedUrl.username ||
-        signedUrl.password ||
-        signedUrl.port ||
-        !signedUrl.pathname.startsWith(
-          `/storage/v1/object/sign/${bucket}/`
-        ) ||
-        !signedUrl.searchParams.has("token")
-      ) {
-        throw new Error("Invalid generated signed URL");
-      }
+      // แก้การจัดการ URL ที่ Supabase ส่งกลับมา
+      const signedUrl = normalizeSignedUrl(data.signedURL);
 
       console.log("[verify] Signed URL created successfully:", {
         bucket,
         path: candidate,
       });
 
-      return signedUrl.toString();
+      return signedUrl;
     }
 
     throw new Error(
@@ -431,33 +482,21 @@ module.exports = async function handler(req, res) {
         `${supabaseUrl}/rest/v1/folder_files`
       );
 
-      queryUrl.searchParams.set(
-        "folder_id",
-        `eq.${folderId}`
-      );
-
-      queryUrl.searchParams.set(
-        "select",
-        "name,storage_path"
-      );
-
+      queryUrl.searchParams.set("folder_id", `eq.${folderId}`);
+      queryUrl.searchParams.set("select", "name,storage_path");
       queryUrl.searchParams.set("order", "name.asc");
-
       queryUrl.searchParams.set(
         "limit",
         String(maxFolderFiles + 1)
       );
 
-      const filesResponse = await fetch(
-        queryUrl.toString(),
-        {
-          method: "GET",
-          headers: {
-            apikey: serviceKey,
-            Authorization: `Bearer ${serviceKey}`,
-          },
-        }
-      );
+      const filesResponse = await fetch(queryUrl.toString(), {
+        method: "GET",
+        headers: {
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+        },
+      });
 
       if (!filesResponse.ok) {
         console.error(
