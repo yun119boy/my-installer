@@ -80,7 +80,7 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // ตรวจสอบและแปลง Storage Path เป็น path ภายใน Bucket
+  // แปลง Storage URL ให้เป็น path ภายใน bucket
   function normalizeStoragePath(value) {
     if (typeof value !== "string" || !value.trim()) {
       throw new Error("Missing storage path");
@@ -88,7 +88,6 @@ module.exports = async function handler(req, res) {
 
     let path = value.trim();
 
-    // รองรับ URL เต็มจาก Supabase Storage
     if (/^https?:\/\//i.test(path)) {
       let url;
 
@@ -122,7 +121,7 @@ module.exports = async function handler(req, res) {
         throw new Error("Invalid Storage URL path");
       }
 
-      // Signed URL ที่มี token สามารถนำมาใช้ต่อได้
+      // ใช้ Signed URL เดิมได้ถ้ายังมี token
       if (prefix === prefixes[2]) {
         if (!url.searchParams.has("token")) {
           throw new Error("Missing signed URL token");
@@ -136,7 +135,6 @@ module.exports = async function handler(req, res) {
       path = url.pathname.slice(prefix.length);
     }
 
-    // ถอดรหัส URL encoding หนึ่งครั้ง
     try {
       path = decodeURIComponent(path);
     } catch {
@@ -173,6 +171,7 @@ module.exports = async function handler(req, res) {
   }
 
   // สร้าง Signed URL อายุ 24 ชั่วโมง
+  // พร้อมบันทึก path ที่ใช้ หาก Supabase ปฏิเสธ
   async function createSignedUrl(storagePath) {
     const normalized = normalizeStoragePath(storagePath);
 
@@ -180,73 +179,107 @@ module.exports = async function handler(req, res) {
       return normalized.existingSignedUrl;
     }
 
-    const encodedPath = normalized.segments
-      .map((segment) => encodeURIComponent(segment))
-      .join("/");
+    const candidates = [normalized.path];
 
-    const response = await fetch(
-      `${supabaseUrl}/storage/v1/object/sign/${bucket}/${encodedPath}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: serviceKey,
-          Authorization: `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({
-          expiresIn: 86400,
-        }),
-      }
-    );
+    // รองรับกรณี path มีชื่อ bucket นำหน้า
+    if (normalized.path.startsWith(`${bucket}/`)) {
+      candidates.push(
+        normalized.path.slice(bucket.length + 1)
+      );
+    }
 
-    if (!response.ok) {
-      const details = await response.text();
+    const uniqueCandidates = [...new Set(candidates)];
 
-      console.error(
-        "Signed URL creation failed:",
-        response.status,
-        details.slice(0, 300)
+    let lastStatus = 0;
+    let lastDetails = "";
+
+    for (const candidate of uniqueCandidates) {
+      const encodedPath = candidate
+        .split("/")
+        .map((segment) => encodeURIComponent(segment))
+        .join("/");
+
+      const response = await fetch(
+        `${supabaseUrl}/storage/v1/object/sign/${bucket}/${encodedPath}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({
+            expiresIn: 86400,
+          }),
+        }
       );
 
-      throw new Error("Could not create signed URL");
+      if (!response.ok) {
+        lastStatus = response.status;
+        lastDetails = (await response.text()).slice(0, 300);
+
+        console.error("Signed URL attempt failed:", {
+          status: lastStatus,
+          path: candidate,
+          details: lastDetails,
+        });
+
+        continue;
+      }
+
+      const data = await response.json();
+
+      if (
+        typeof data.signedURL !== "string" ||
+        !data.signedURL
+      ) {
+        lastStatus = response.status;
+        lastDetails = "Supabase did not return signedURL";
+
+        console.error("Signed URL response invalid:", {
+          path: candidate,
+          details: lastDetails,
+        });
+
+        continue;
+      }
+
+      const signedUrl = new URL(
+        data.signedURL,
+        `${supabaseUrl}/storage/v1/`
+      );
+
+      if (
+        signedUrl.protocol !== "https:" ||
+        signedUrl.hostname !== allowedHost ||
+        signedUrl.username ||
+        signedUrl.password ||
+        signedUrl.port ||
+        !signedUrl.pathname.startsWith(
+          `/storage/v1/object/sign/${bucket}/`
+        ) ||
+        !signedUrl.searchParams.has("token")
+      ) {
+        throw new Error("Invalid generated signed URL");
+      }
+
+      return signedUrl.toString();
     }
 
-    const data = await response.json();
-
-    if (typeof data.signedURL !== "string") {
-      throw new Error("Missing signed URL");
-    }
-
-    const signedUrl = new URL(
-      data.signedURL,
-      `${supabaseUrl}/storage/v1/`
+    throw new Error(
+      `Unable to sign Storage object; status=${lastStatus}; details=${lastDetails}`
     );
-
-    if (
-      signedUrl.protocol !== "https:" ||
-      signedUrl.hostname !== allowedHost ||
-      signedUrl.username ||
-      signedUrl.password ||
-      signedUrl.port ||
-      !signedUrl.pathname.startsWith(
-        `/storage/v1/object/sign/${bucket}/`
-      ) ||
-      !signedUrl.searchParams.has("token")
-    ) {
-      throw new Error("Invalid generated signed URL");
-    }
-
-    return signedUrl.toString();
   }
 
   try {
     const forwarded = req.headers["x-forwarded-for"];
+
     const ip =
       typeof forwarded === "string"
         ? forwarded.split(",")[0].trim()
         : "unknown";
 
-    // 1. ตรวจสอบ License Key ผ่าน Supabase RPC
+    // 1. ตรวจสอบ License Key และ Device ID
     const rpcResponse = await fetch(
       `${supabaseUrl}/rest/v1/rpc/verify_license_device`,
       {
@@ -265,7 +298,11 @@ module.exports = async function handler(req, res) {
     );
 
     if (!rpcResponse.ok) {
-      console.error("License RPC failed:", rpcResponse.status);
+      console.error(
+        "License RPC failed:",
+        rpcResponse.status,
+        (await rpcResponse.text()).slice(0, 300)
+      );
 
       return res.status(500).json({
         valid: false,
@@ -274,6 +311,7 @@ module.exports = async function handler(req, res) {
     }
 
     const rawResult = await rpcResponse.json();
+
     const result = Array.isArray(rawResult)
       ? rawResult[0]
       : rawResult;
@@ -285,8 +323,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 2. รองรับไฟล์เดี่ยว
-    // รองรับ result เก่าที่ไม่มี type เพื่อรักษาความเข้ากันได้
+    // 2. รองรับคีย์ไฟล์เดี่ยว
     if (result.type === "file" || !result.type) {
       const fileName =
         typeof result.fileName === "string"
@@ -313,7 +350,7 @@ module.exports = async function handler(req, res) {
         parsedUrl = null;
       }
 
-      // อนุญาตเฉพาะ GitHub Release ของ Repository ที่กำหนด
+      // อนุญาตเฉพาะ GitHub Release ที่กำหนด
       if (
         parsedUrl &&
         parsedUrl.protocol === "https:" &&
@@ -350,6 +387,7 @@ module.exports = async function handler(req, res) {
     // 3. รองรับคีย์โฟลเดอร์
     if (result.type === "folder") {
       const folderId = result.folderId;
+
       const folderName =
         typeof result.folderName === "string"
           ? result.folderName.trim()
@@ -368,28 +406,41 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // ดึงรายการไฟล์ในโฟลเดอร์จากฐานข้อมูล
+      // ดึงรายการไฟล์จากฐานข้อมูล
       const queryUrl = new URL(
         `${supabaseUrl}/rest/v1/folder_files`
       );
 
-      queryUrl.searchParams.set("folder_id", `eq.${folderId}`);
-      queryUrl.searchParams.set("select", "name,storage_path");
+      queryUrl.searchParams.set(
+        "folder_id",
+        `eq.${folderId}`
+      );
+      queryUrl.searchParams.set(
+        "select",
+        "name,storage_path"
+      );
       queryUrl.searchParams.set("order", "name.asc");
-      queryUrl.searchParams.set("limit", String(maxFolderFiles + 1));
+      queryUrl.searchParams.set(
+        "limit",
+        String(maxFolderFiles + 1)
+      );
 
-      const filesResponse = await fetch(queryUrl.toString(), {
-        method: "GET",
-        headers: {
-          apikey: serviceKey,
-          Authorization: `Bearer ${serviceKey}`,
-        },
-      });
+      const filesResponse = await fetch(
+        queryUrl.toString(),
+        {
+          method: "GET",
+          headers: {
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+          },
+        }
+      );
 
       if (!filesResponse.ok) {
         console.error(
           "Folder file query failed:",
-          filesResponse.status
+          filesResponse.status,
+          (await filesResponse.text()).slice(0, 300)
         );
 
         return res.status(500).json({
@@ -400,7 +451,10 @@ module.exports = async function handler(req, res) {
 
       const folderFiles = await filesResponse.json();
 
-      if (!Array.isArray(folderFiles) || folderFiles.length === 0) {
+      if (
+        !Array.isArray(folderFiles) ||
+        folderFiles.length === 0
+      ) {
         return res.status(404).json({
           valid: false,
           message: "ไม่พบไฟล์ในโฟลเดอร์นี้",
@@ -414,7 +468,7 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // ตรวจสอบชื่อและสร้าง Signed URL ให้ทุกไฟล์
+      // สร้าง Signed URL ให้ทุกไฟล์ในโฟลเดอร์
       const files = [];
 
       for (const file of folderFiles) {
@@ -465,7 +519,9 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     console.error(
       "License verification failed:",
-      error instanceof Error ? error.message : "Unknown error"
+      error instanceof Error
+        ? error.message
+        : "Unknown error"
     );
 
     return res.status(500).json({
