@@ -81,6 +81,44 @@ module.exports = async function handler(req, res) {
     });
   }
 
+  // ตรวจสอบชื่อไฟล์และพาธสัมพัทธ์สำหรับโฟลเดอร์
+  // ตัวอย่างที่อนุญาต: modules/helper.lua
+  function isSafeRelativePath(value) {
+    if (
+      typeof value !== "string" ||
+      value.length === 0 ||
+      value.length > 240 ||
+      value.startsWith("/") ||
+      value.startsWith("\\") ||
+      /^[a-zA-Z]:/.test(value) ||
+      value.includes("\\") ||
+      /[\u0000-\u001f\u007f]/.test(value)
+    ) {
+      return false;
+    }
+
+    const parts = value.split("/");
+
+    return parts.every((part) => {
+      if (
+        !part ||
+        part === "." ||
+        part === ".." ||
+        part.length > 100 ||
+        !/^[a-zA-Z0-9._-]+$/.test(part) ||
+        /[. ]$/.test(part)
+      ) {
+        return false;
+      }
+
+      const stem = part.split(".")[0].toUpperCase();
+
+      return !/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(
+        stem
+      );
+    });
+  }
+
   // แปลง Storage URL ให้เป็น path ภายใน bucket
   function normalizeStoragePath(value) {
     if (typeof value !== "string" || !value.trim()) {
@@ -122,17 +160,11 @@ module.exports = async function handler(req, res) {
         throw new Error("Invalid Storage URL path");
       }
 
-      // ไม่ใช้ Signed URL ที่หมดอายุหรือ token ไม่ถูกต้อง
-      // ให้สร้าง Signed URL ใหม่จาก object path แทน
-      if (prefix === prefixes[2]) {
-        if (!url.searchParams.has("token")) {
-          throw new Error("Missing signed URL token");
-        }
-
-        path = url.pathname.slice(prefix.length);
-      } else {
-        path = url.pathname.slice(prefix.length);
+      if (prefix === prefixes[2] && !url.searchParams.has("token")) {
+        throw new Error("Missing signed URL token");
       }
+
+      path = url.pathname.slice(prefix.length);
     }
 
     try {
@@ -158,19 +190,16 @@ module.exports = async function handler(req, res) {
           segment === "." ||
           segment === ".." ||
           segment.includes("\\") ||
-          /[\u0000-\u001F\u007F]/.test(segment)
+          /[\u0000-\u001f\u007f]/.test(segment)
       )
     ) {
       throw new Error("Invalid Storage path");
     }
 
-    return {
-      path,
-      segments,
-    };
+    return { path, segments };
   }
 
-  // แปลง signedURL ที่ Supabase ส่งกลับมาให้เป็น URL เต็ม
+  // ตรวจสอบ Signed URL ที่ Supabase สร้างขึ้น
   function normalizeSignedUrl(value) {
     if (typeof value !== "string" || !value.trim()) {
       throw new Error("Supabase returned an empty signed URL");
@@ -183,9 +212,6 @@ module.exports = async function handler(req, res) {
       if (/^https:\/\//i.test(raw)) {
         signedUrl = new URL(raw);
       } else {
-        // Supabase อาจส่งกลับมาเป็น:
-        // /object/sign/bucket/path?token=...
-        // /storage/v1/object/sign/bucket/path?token=...
         const relative = raw.replace(/^\/+/, "");
 
         if (relative.startsWith("storage/v1/")) {
@@ -199,26 +225,11 @@ module.exports = async function handler(req, res) {
           throw new Error("Unexpected signed URL path format");
         }
       }
-    } catch (error) {
-      console.error("[verify] Signed URL parsing failed:", {
-        reason:
-          error instanceof Error
-            ? error.message
-            : "Unknown parsing error",
-      });
-
+    } catch {
       throw new Error("Unable to parse generated signed URL");
     }
 
-    console.log("[verify] Signed URL validation:", {
-      protocol: signedUrl.protocol,
-      hostname: signedUrl.hostname,
-      pathname: signedUrl.pathname,
-      hasToken: signedUrl.searchParams.has("token"),
-    });
-
-    const pathPrefix =
-      `/storage/v1/object/sign/${bucket}/`;
+    const pathPrefix = `/storage/v1/object/sign/${bucket}/`;
 
     const valid =
       signedUrl.protocol === "https:" &&
@@ -230,16 +241,6 @@ module.exports = async function handler(req, res) {
       signedUrl.searchParams.has("token");
 
     if (!valid) {
-      console.error("[verify] Signed URL validation failed:", {
-        protocolValid: signedUrl.protocol === "https:",
-        hostnameValid: signedUrl.hostname === allowedHost,
-        usernamePresent: Boolean(signedUrl.username),
-        passwordPresent: Boolean(signedUrl.password),
-        portPresent: Boolean(signedUrl.port),
-        pathValid: signedUrl.pathname.startsWith(pathPrefix),
-        hasToken: signedUrl.searchParams.has("token"),
-      });
-
       throw new Error("Invalid generated signed URL");
     }
 
@@ -249,7 +250,6 @@ module.exports = async function handler(req, res) {
   // สร้าง Signed URL อายุ 24 ชั่วโมง
   async function createSignedUrl(storagePath) {
     const normalized = normalizeStoragePath(storagePath);
-
     const candidates = [normalized.path];
 
     if (normalized.path.startsWith(`${bucket}/`)) {
@@ -268,12 +268,6 @@ module.exports = async function handler(req, res) {
         .split("/")
         .map((segment) => encodeURIComponent(segment))
         .join("/");
-
-      console.log("[verify] Storage signing request:", {
-        bucket,
-        path: candidate,
-        encodedPath,
-      });
 
       const response = await fetch(
         `${supabaseUrl}/storage/v1/object/sign/${bucket}/${encodedPath}`,
@@ -311,22 +305,10 @@ module.exports = async function handler(req, res) {
       ) {
         lastStatus = response.status;
         lastDetails = "Supabase did not return signedURL";
-
-        console.error("[verify] Signed URL response invalid:", {
-          path: candidate,
-          details: lastDetails,
-        });
-
         continue;
       }
 
-      // แก้การจัดการ URL ที่ Supabase ส่งกลับมา
       const signedUrl = normalizeSignedUrl(data.signedURL);
-
-      console.log("[verify] Signed URL created successfully:", {
-        bucket,
-        path: candidate,
-      });
 
       return signedUrl;
     }
@@ -388,7 +370,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 2. รองรับคีย์ไฟล์เดี่ยว
+    // 2. รองรับ License แบบไฟล์เดี่ยว
     if (result.type === "file" || !result.type) {
       const fileName =
         typeof result.fileName === "string"
@@ -401,8 +383,6 @@ module.exports = async function handler(req, res) {
           : "";
 
       if (!fileName || !downloadUrl) {
-        console.error("[verify] File license data missing");
-
         return res.status(500).json({
           valid: false,
           message: "ข้อมูลไฟล์ของ License ไม่ครบ",
@@ -417,7 +397,7 @@ module.exports = async function handler(req, res) {
         parsedUrl = null;
       }
 
-      // อนุญาตเฉพาะ GitHub Release ที่กำหนด
+      // อนุญาตเฉพาะ GitHub Release ตาม URL ที่กำหนด
       if (
         parsedUrl &&
         parsedUrl.protocol === "https:" &&
@@ -439,8 +419,6 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      console.log("[verify] Processing single-file license");
-
       const signedUrl = await createSignedUrl(downloadUrl);
 
       return res.status(200).json({
@@ -453,7 +431,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 3. รองรับคีย์โฟลเดอร์
+    // 3. รองรับ License แบบโฟลเดอร์
     if (result.type === "folder") {
       const folderId = result.folderId;
 
@@ -469,15 +447,13 @@ module.exports = async function handler(req, res) {
         ) ||
         !folderName
       ) {
-        console.error("[verify] Folder license data invalid");
-
         return res.status(500).json({
           valid: false,
           message: "ข้อมูลโฟลเดอร์ของ License ไม่ถูกต้อง",
         });
       }
 
-      // ดึงรายการไฟล์จากฐานข้อมูล
+      // ดึงรายการไฟล์ในโฟลเดอร์จากฐานข้อมูล
       const queryUrl = new URL(
         `${supabaseUrl}/rest/v1/folder_files`
       );
@@ -513,13 +489,6 @@ module.exports = async function handler(req, res) {
 
       const folderFiles = await filesResponse.json();
 
-      console.log("[verify] Folder file records found:", {
-        folderId,
-        count: Array.isArray(folderFiles)
-          ? folderFiles.length
-          : 0,
-      });
-
       if (
         !Array.isArray(folderFiles) ||
         folderFiles.length === 0
@@ -537,32 +506,32 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // สร้าง Signed URL ให้ทุกไฟล์ในโฟลเดอร์
-      const files = [];
+      // ตรวจสอบข้อมูลทั้งหมดก่อนสร้าง Signed URL
+      const seenNames = new Set();
 
       for (const file of folderFiles) {
         if (
-          typeof file.name !== "string" ||
-          !file.name.trim() ||
-          file.name.length > 1000 ||
-          file.name.startsWith("/") ||
-          file.name.split("/").some(
-            (segment) =>
-              !segment ||
-              segment === "." ||
-              segment === ".." ||
-              segment.includes("\\")
-          ) ||
+          !isSafeRelativePath(file.name) ||
           typeof file.storage_path !== "string" ||
           !file.storage_path.trim()
         ) {
           throw new Error("Invalid folder file record");
         }
 
-        console.log("[verify] Processing folder file:", {
-          name: file.name,
-        });
+        // ป้องกันชื่อพาธซ้ำโดยไม่สนตัวพิมพ์เล็ก/ใหญ่
+        const normalizedName = file.name.toLowerCase();
 
+        if (seenNames.has(normalizedName)) {
+          throw new Error("Duplicate folder file path");
+        }
+
+        seenNames.add(normalizedName);
+      }
+
+      // สร้าง Signed URL ให้แต่ละไฟล์ โดยเก็บพาธย่อยไว้ใน name
+      const files = [];
+
+      for (const file of folderFiles) {
         const downloadUrl = await createSignedUrl(
           file.storage_path
         );
