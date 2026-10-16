@@ -27,7 +27,6 @@ a{color:var(--accent);overflow-wrap:anywhere}
 #dashboard{display:none}
 header{padding:18px 24px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:15px}
 header h1{margin:0;font-size:22px}
-#logoutButton{width:auto}
 .container{max-width:1200px;margin:30px auto;padding:0 18px 50px}
 .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .card,.section{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px}
@@ -39,7 +38,7 @@ header h1{margin:0;font-size:22px}
 .small{font-size:13px}
 .item{padding:15px;margin-top:10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;overflow-wrap:anywhere}
 .item strong{overflow-wrap:anywhere}
-.item-line{margin-top:7px;color:var(--muted)}
+.item-line{margin-top:7px;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
 .item-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .item-actions button{width:auto}
 .status{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:12px}
@@ -50,6 +49,7 @@ hr{border:0;border-top:1px solid var(--border);margin:24px 0}
 </style>
 </head>
 <body>
+
 <div id="loginPage">
  <h1>Admin Login</h1>
  <form id="loginForm">
@@ -67,43 +67,68 @@ hr{border:0;border-top:1px solid var(--border);margin:24px 0}
   <h1>My Installer Admin</h1>
   <button id="logoutButton" class="secondary">ออกจากระบบ</button>
  </header>
+
  <main class="container">
   <div class="cards">
-   <div class="card"><h2>📁 Files ที่ยังใช้งาน</h2><div class="number" id="fileCount">0</div></div>
+   <div class="card"><h2>📁 Files และ Folders</h2><div class="number" id="fileCount">0</div></div>
    <div class="card"><h2>🔑 Keys ทั้งหมด</h2><div class="number" id="keyCount">0</div></div>
    <div class="card"><h2>📊 Usage ทั้งหมด</h2><div class="number" id="usageCount">0</div></div>
   </div>
 
   <section class="section">
-   <h2>📤 อัปโหลดไฟล์</h2>
-   <p class="muted">เลือกหลายไฟล์พร้อมกัน หรือเลือกทั้งโฟลเดอร์ ไฟล์จะถูกเก็บใน Private Bucket</p>
+   <h2>📤 อัปโหลดไฟล์เดี่ยว</h2>
+   <p class="muted">ไฟล์ที่อัปโหลดตรงนี้จะเป็นรายการไฟล์เดี่ยว และสร้าง Key แยกได้</p>
+
    <label for="uploadFiles">เลือกไฟล์</label>
    <input type="file" id="uploadFiles" multiple>
+
+   <label for="uploadDisplayName">ชื่อที่แสดง (ไม่บังคับ)</label>
+   <input type="text" id="uploadDisplayName" maxlength="200" placeholder="เช่น SteamTool เวอร์ชันล่าสุด">
+
+   <button id="uploadButton" type="button" style="margin-top:16px" onclick="uploadSelectedFiles()">อัปโหลดไฟล์</button>
+   <div id="uploadProgress" class="status" role="status"></div>
+
+   <hr>
+
+   <h2>📂 อัปโหลดทั้งโฟลเดอร์</h2>
+   <p class="muted">แต่ละโฟลเดอร์หลักจะเป็นหนึ่งรายการ และสามารถสร้าง Key หนึ่งชุดสำหรับทั้งโฟลเดอร์ได้</p>
+
    <label for="uploadFolder">เลือกโฟลเดอร์</label>
    <input type="file" id="uploadFolder" multiple webkitdirectory>
-   <label for="uploadDisplayName">ชื่อที่แสดงบนเว็บไซต์ (ไม่บังคับ)</label>
-   <input type="text" id="uploadDisplayName" maxlength="200" placeholder="เช่น SteamTool เวอร์ชันล่าสุด">
-   <p class="muted small">ชื่อแสดงไม่เปลี่ยนชื่อไฟล์จริง หากอัปโหลดหลายไฟล์ ชื่อนี้จะใช้กับทุกรายการ</p>
-   <button id="uploadButton" type="button" style="margin-top:16px" onclick="uploadSelectedFiles()">อัปโหลดที่เลือก</button>
-   <div id="uploadProgress" class="status" role="status"></div>
+
+   <label for="folderDisplayName">ชื่อโฟลเดอร์ที่แสดง (ไม่บังคับ)</label>
+   <input type="text" id="folderDisplayName" maxlength="200" placeholder="เช่น SteamTool Mod">
+
+   <button id="uploadFolderButton" type="button" style="margin-top:16px" onclick="uploadFolderSelection()">อัปโหลดโฟลเดอร์</button>
+   <div id="folderUploadProgress" class="status" role="status"></div>
+
+   <h3 style="margin-top:28px">📁 รายการโฟลเดอร์</h3>
+   <button class="secondary" type="button" onclick="loadFolders()">รีเฟรชโฟลเดอร์</button>
+   <div id="folderList" style="margin-top:12px">กำลังโหลด...</div>
+
    <hr>
-   <h3>เพิ่ม URL ภายนอก</h3>
+
+   <h2>🌐 เพิ่ม URL ภายนอก</h2>
    <label for="fileName">ชื่อไฟล์จริง</label>
-   <input type="text" id="fileName" placeholder="เช่น st-setup-1.8.30.exe">
+   <input type="text" id="fileName" placeholder="เช่น st-setup.exe">
+
    <label for="fileUrl">URL ของไฟล์</label>
    <input type="url" id="fileUrl" placeholder="https://example.com/file.exe">
-   <label for="externalDisplayName">ชื่อที่แสดงบนเว็บไซต์ (ไม่บังคับ)</label>
+
+   <label for="externalDisplayName">ชื่อที่แสดง (ไม่บังคับ)</label>
    <input type="text" id="externalDisplayName" maxlength="200" placeholder="เช่น SteamTool เวอร์ชันล่าสุด">
+
    <button type="button" style="margin-top:16px" onclick="addFile()">เพิ่ม URL</button>
-   <h3 style="margin-top:28px">รายการไฟล์</h3>
+
+   <h3 style="margin-top:28px">📄 รายการไฟล์เดี่ยว</h3>
    <button class="secondary" type="button" onclick="refreshAll()">รีเฟรชรายการ</button>
    <div id="fileList" style="margin-top:12px">กำลังโหลด...</div>
   </section>
 
   <section class="section">
    <h2>🔑 Key Management</h2>
-   <label for="keyFile">เลือกไฟล์ที่ต้องการผูกกับ Key</label>
-   <select id="keyFile"><option value="">กำลังโหลดไฟล์...</option></select>
+   <label for="keyTarget">เลือกไฟล์เดี่ยวหรือโฟลเดอร์</label>
+   <select id="keyTarget"><option value="">กำลังโหลด...</option></select>
    <button type="button" style="margin-top:16px" onclick="generateKey()">Generate Key</button>
    <div id="generatedKey" class="item" style="display:none"></div>
   </section>
@@ -136,17 +161,20 @@ function setStatus(element,text,type=""){
  element.textContent=text;
  element.className="status "+type;
 }
+
 function formatDate(value){
  if(!value)return "-";
  const date=new Date(value);
  return Number.isNaN(date.getTime())?"-":date.toLocaleString("th-TH");
 }
+
 function makeElement(tag,text,className){
  const element=document.createElement(tag);
  if(text!==undefined&&text!==null)element.textContent=String(text);
  if(className)element.className=className;
  return element;
 }
+
 function makeButton(text,callback,className="secondary"){
  const button=makeElement("button",text);
  button.type="button";
@@ -154,24 +182,30 @@ function makeButton(text,callback,className="secondary"){
  button.addEventListener("click",callback);
  return button;
 }
+
 function addLine(parent,text){
  parent.appendChild(makeElement("div",text,"item-line"));
 }
-function displayNameOf(file){
- return file?.display_name?.trim()||file?.name||"ไม่มีชื่อ";
+
+function displayNameOf(item){
+ return item?.display_name?.trim()||item?.name||"ไม่มีชื่อ";
 }
+
 function isExternalUrl(value){
  return typeof value==="string"&&/^https?:\/\//i.test(value);
 }
+
 function objectPathOf(file){
  return file?.storage_url&&!isExternalUrl(file.storage_url)?file.storage_url:null;
 }
+
 async function requireSession(){
  const {data,error}=await supabaseClient.auth.getSession();
  if(error)throw error;
  if(!data.session)throw new Error("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่");
  return data.session;
 }
+
 async function checkSession(){
  const {data,error}=await supabaseClient.auth.getSession();
  if(error){
@@ -180,13 +214,22 @@ async function checkSession(){
  }
  if(data.session)showDashboard();
 }
+
 function showDashboard(){
  $("loginPage").style.display="none";
  $("dashboard").style.display="block";
  refreshAll();
 }
+
 async function refreshAll(){
- await Promise.all([loadFiles(),loadKeyFiles(),loadKeys(),loadStats(),loadUsageHistory()]);
+ await Promise.all([
+  loadFiles(),
+  loadFolders(),
+  loadKeyFiles(),
+  loadKeys(),
+  loadStats(),
+  loadUsageHistory()
+ ]);
 }
 
 $("loginForm").addEventListener("submit",async event=>{
@@ -214,6 +257,7 @@ $("loginForm").addEventListener("submit",async event=>{
   button.disabled=false;
  }
 });
+
 $("logoutButton").addEventListener("click",async()=>{
  const {error}=await supabaseClient.auth.signOut();
  if(error){alert("ออกจากระบบไม่สำเร็จ: "+error.message);return;}
@@ -226,267 +270,553 @@ $("logoutButton").addEventListener("click",async()=>{
 async function loadStats(){
  const results=await Promise.all([
   supabaseClient.from("files").select("id",{count:"exact",head:true}).is("deleted_at",null),
+  supabaseClient.from("file_folders").select("id",{count:"exact",head:true}).is("deleted_at",null),
   supabaseClient.from("keys").select("id",{count:"exact",head:true}),
   supabaseClient.from("key_uses").select("id",{count:"exact",head:true})
  ]);
- const [filesResult,keysResult,usageResult]=results;
- if(filesResult.error||keysResult.error||usageResult.error){
+
+ if(results.some(result=>result.error)){
   console.error("โหลดสถิติไม่สำเร็จ",results);
   return;
  }
- $("fileCount").textContent=filesResult.count??0;
- $("keyCount").textContent=keysResult.count??0;
- $("usageCount").textContent=usageResult.count??0;
+
+ $("fileCount").textContent=(results[0].count||0)+(results[1].count||0);
+ $("keyCount").textContent=results[2].count||0;
+ $("usageCount").textContent=results[3].count||0;
 }
 
 async function getFileLink(file){
- if(file.deleted_at)throw new Error("ไฟล์นี้ถูกลบออกจากการใช้งานแล้ว");
+ if(file.deleted_at)throw new Error("ไฟล์นี้ถูกปิดใช้งานแล้ว");
  if(!file.storage_url)throw new Error("รายการนี้ไม่มี storage_url");
  if(isExternalUrl(file.storage_url))return file.storage_url;
+
  const filename=(file.name||"").split("/").pop();
- const {data,error}=await supabaseClient.storage.from(STORAGE_BUCKET)
+ const {data,error}=await supabaseClient.storage
+  .from(STORAGE_BUCKET)
   .createSignedUrl(file.storage_url,SIGNED_URL_SECONDS,{download:filename||true});
+
  if(error)throw error;
  return data.signedUrl;
 }
 
+/* อัปโหลดไฟล์เดี่ยว */
 async function uploadSelectedFiles(){
- const filesInput=$("uploadFiles");
- const folderInput=$("uploadFolder");
+ const input=$("uploadFiles");
  const button=$("uploadButton");
  const progress=$("uploadProgress");
  const displayName=$("uploadDisplayName").value.trim();
- const selected=[
-  ...Array.from(filesInput.files||[]).map(file=>({file,relativePath:file.name})),
-  ...Array.from(folderInput.files||[]).map(file=>({file,relativePath:file.webkitRelativePath||file.name}))
- ];
- if(!selected.length){alert("กรุณาเลือกไฟล์หรือโฟลเดอร์ก่อน");return;}
- const unique=new Map();
- for(const entry of selected){
-  const key=entry.relativePath+"|"+entry.file.size+"|"+entry.file.lastModified;
-  if(!unique.has(key))unique.set(key,entry);
- }
- const files=Array.from(unique.values());
+ const files=Array.from(input.files||[]);
+
+ if(!files.length){alert("กรุณาเลือกไฟล์ก่อน");return;}
+
  try{await requireSession();}
  catch(error){alert(error.message);return;}
 
  button.disabled=true;
  let success=0;
  const errors=[];
+
  try{
   for(let i=0;i<files.length;i++){
-   const {file,relativePath}=files[i];
-   setStatus(progress,`กำลังอัปโหลด ${i+1}/${files.length}\n${relativePath}`);
-   const safeParts=relativePath.split("/").map(part=>part.replace(/[^\wก-๙ .()-]/g,"_"));
-   const objectPath=crypto.randomUUID()+"/"+safeParts.join("/");
-   const {error:uploadError}=await supabaseClient.storage.from(STORAGE_BUCKET)
-    .upload(objectPath,file,{upsert:false,contentType:file.type||"application/octet-stream"});
-   if(uploadError){errors.push(`${relativePath}: อัปโหลดไม่สำเร็จ: ${uploadError.message}`);continue;}
-   const {error:insertError}=await supabaseClient.from("files").insert({
-    name:relativePath,display_name:displayName||null,storage_url:objectPath
-   });
-   if(insertError){
-    const {error:cleanupError}=await supabaseClient.storage.from(STORAGE_BUCKET).remove([objectPath]);
-    errors.push(`${relativePath}: บันทึกข้อมูลไม่สำเร็จ: ${insertError.message}`+
-     (cleanupError?`; ลบไฟล์ที่อัปโหลดไว้ไม่สำเร็จ: ${cleanupError.message}`:""));
+   const file=files[i];
+   const objectPath=crypto.randomUUID()+"/"+file.name.replace(/[\/\\]/g,"_");
+
+   setStatus(progress,`กำลังอัปโหลด ${i+1}/${files.length}\n${file.name}`);
+
+   const {error:uploadError}=await supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .upload(objectPath,file,{
+     upsert:false,
+     contentType:file.type||"application/octet-stream"
+    });
+
+   if(uploadError){
+    errors.push(file.name+": "+uploadError.message);
     continue;
    }
+
+   const {error:insertError}=await supabaseClient.from("files").insert({
+    name:file.name,
+    display_name:displayName||null,
+    storage_url:objectPath
+   });
+
+   if(insertError){
+    const {error:cleanupError}=await supabaseClient.storage
+     .from(STORAGE_BUCKET).remove([objectPath]);
+
+    errors.push(file.name+": "+insertError.message+
+     (cleanupError?" (ลบไฟล์ที่อัปโหลดค้างไว้ไม่สำเร็จ)":""));
+    continue;
+   }
+
    success++;
   }
  }catch(error){
-  errors.push(error.message||"เกิดข้อผิดพลาดระหว่างอัปโหลด");
+  errors.push(error.message);
  }finally{
   button.disabled=false;
-  filesInput.value="";
-  folderInput.value="";
+  input.value="";
  }
+
  await refreshAll();
- setStatus(progress,`เสร็จแล้ว: สำเร็จ ${success}/${files.length} ไฟล์`+
-  (errors.length?"\n\nรายการที่ไม่สำเร็จ:\n"+errors.join("\n"):""),
+
+ setStatus(progress,`สำเร็จ ${success}/${files.length} ไฟล์`+
+  (errors.length?"\nรายการผิดพลาด:\n"+errors.join("\n"):""),
   errors.length?"error":"success");
 }
 
+/* อัปโหลดโฟลเดอร์และรักษาเส้นทางไฟล์ */
+function sanitizeRelativePath(path){
+ const parts=path.replace(/\\/g,"/").split("/");
+
+ if(!parts.length||parts.some(part=>
+  !part||part==="."||part===".."||part.includes("\0")
+ ))throw new Error("พบเส้นทางไฟล์ที่ไม่ถูกต้อง: "+path);
+
+ return parts.map(part=>
+  part.normalize("NFC").replace(/[<>:"|?*\x00-\x1F]/g,"_")
+ ).join("/");
+}
+
+async function uploadFolderSelection(){
+ const input=$("uploadFolder");
+ const button=$("uploadFolderButton");
+ const progress=$("folderUploadProgress");
+ const displayName=$("folderDisplayName").value.trim();
+ const selected=Array.from(input.files||[]);
+
+ if(!selected.length){alert("กรุณาเลือกโฟลเดอร์ก่อน");return;}
+
+ const groups=new Map();
+
+ try{
+  for(const file of selected){
+   const path=file.webkitRelativePath||file.name;
+   const parts=path.replace(/\\/g,"/").split("/").filter(Boolean);
+   if(parts.length<2)throw new Error("กรุณาเลือกโฟลเดอร์ ไม่ใช่เลือกไฟล์เดี่ยว");
+
+   const root=parts[0];
+   const relativePath=sanitizeRelativePath(parts.slice(1).join("/"));
+
+   if(!groups.has(root))groups.set(root,[]);
+   groups.get(root).push({file,relativePath});
+  }
+ }catch(error){
+  alert(error.message);
+  return;
+ }
+
+ if(groups.size>1&&!confirm(
+  `พบ ${groups.size} โฟลเดอร์หลัก ระบบจะสร้างรายการแยกตามโฟลเดอร์หลัก ต้องการทำต่อหรือไม่?`
+ ))return;
+
+ try{await requireSession();}
+ catch(error){alert(error.message);return;}
+
+ button.disabled=true;
+ let success=0;
+ const errors=[];
+
+ try{
+  for(const [root,entries] of groups){
+   let folderId=null;
+   const uploadedPaths=[];
+   let folderSaved=false;
+
+   try{
+    setStatus(progress,"กำลังสร้างรายการโฟลเดอร์: "+root);
+
+    const {data:folder,error:folderError}=await supabaseClient
+     .from("file_folders")
+     .insert({
+      name:root,
+      display_name:displayName||null,
+      storage_path:""
+     })
+     .select("id")
+     .single();
+
+    if(folderError)throw folderError;
+    folderId=folder.id;
+
+    const prefix="folder-contents/"+folderId;
+
+    const {error:pathError}=await supabaseClient
+     .from("file_folders")
+     .update({storage_path:prefix})
+     .eq("id",folderId);
+
+    if(pathError)throw pathError;
+
+    const rows=[];
+
+    for(let i=0;i<entries.length;i++){
+     const entry=entries[i];
+     const objectPath=prefix+"/"+entry.relativePath;
+
+     setStatus(progress,
+      `โฟลเดอร์ ${root}\nกำลังอัปโหลด ${i+1}/${entries.length}\n${entry.relativePath}`);
+
+     const {error:uploadError}=await supabaseClient.storage
+      .from(STORAGE_BUCKET)
+      .upload(objectPath,entry.file,{
+       upsert:false,
+       contentType:entry.file.type||"application/octet-stream"
+      });
+
+     if(uploadError)throw new Error(entry.relativePath+": "+uploadError.message);
+
+     uploadedPaths.push(objectPath);
+     rows.push({
+      folder_id:folderId,
+      name:entry.relativePath,
+      storage_path:objectPath
+     });
+    }
+
+    const {error:rowsError}=await supabaseClient
+     .from("folder_files")
+     .insert(rows);
+
+    if(rowsError)throw rowsError;
+
+    folderSaved=true;
+    success++;
+
+   }catch(error){
+    errors.push(root+": "+error.message);
+
+    if(uploadedPaths.length){
+     const {error:cleanupError}=await supabaseClient.storage
+      .from(STORAGE_BUCKET).remove(uploadedPaths);
+     if(cleanupError)errors.push("คำเตือน: ลบไฟล์บางส่วนจาก Storage ไม่สำเร็จ");
+    }
+
+    if(folderId&&!folderSaved){
+     await supabaseClient.from("folder_files").delete().eq("folder_id",folderId);
+     await supabaseClient.from("file_folders").delete().eq("id",folderId);
+    }
+   }
+  }
+ }finally{
+  button.disabled=false;
+  input.value="";
+  $("folderDisplayName").value="";
+ }
+
+ await refreshAll();
+
+ setStatus(progress,
+  `อัปโหลดสำเร็จ ${success}/${groups.size} โฟลเดอร์`+
+  (errors.length?"\nข้อผิดพลาด:\n"+errors.join("\n"):""),
+  errors.length?"error":"success");
+}
+
+/* เพิ่ม URL ภายนอก */
 async function addFile(){
  const name=$("fileName").value.trim();
  const url=$("fileUrl").value.trim();
  const displayName=$("externalDisplayName").value.trim();
+
  if(!name||!url){alert("กรุณากรอกชื่อไฟล์จริงและ URL");return;}
+
  let parsed;
- try{parsed=new URL(url);}catch{alert("URL ไม่ถูกต้อง");return;}
+ try{parsed=new URL(url);}
+ catch{alert("URL ไม่ถูกต้อง");return;}
+
  if(!["http:","https:"].includes(parsed.protocol)){
-  alert("อนุญาตเฉพาะ URL ที่ขึ้นต้นด้วย http:// หรือ https://");return;
+  alert("อนุญาตเฉพาะ URL http:// หรือ https://");
+  return;
  }
- try{await requireSession();}catch(error){alert(error.message);return;}
+
+ try{await requireSession();}
+ catch(error){alert(error.message);return;}
+
  const {error}=await supabaseClient.from("files").insert({
-  name,display_name:displayName||null,storage_url:url
+  name,
+  display_name:displayName||null,
+  storage_url:url
  });
- if(error){alert("เพิ่ม URL ไม่สำเร็จ: "+error.message);console.error(error);return;}
+
+ if(error){alert("เพิ่ม URL ไม่สำเร็จ: "+error.message);return;}
+
  $("fileName").value="";
  $("fileUrl").value="";
  $("externalDisplayName").value="";
+
  alert("เพิ่ม URL สำเร็จ");
  await refreshAll();
 }
 
-/* อัปเดตเนื้อหาไฟล์ โดยคง files.id เดิมเพื่อรักษาความสัมพันธ์กับ Keys */
+/* แทนที่ไฟล์เดี่ยว */
 async function replaceFile(fileId,oldFile){
- if(oldFile.deleted_at){alert("รายการนี้ถูกลบแล้ว");return;}
+ if(oldFile.deleted_at){alert("รายการนี้ถูกปิดใช้งานแล้ว");return;}
  if(isExternalUrl(oldFile.storage_url)){
-  alert("รายการ URL ภายนอกไม่สามารถอัปเดตไฟล์ผ่าน Storage ได้ กรุณาเพิ่ม URL ใหม่แทน");
+  alert("URL ภายนอกไม่สามารถอัปเดตผ่าน Storage ได้");
   return;
  }
+
  const picker=document.createElement("input");
  picker.type="file";
- picker.accept="*/*";
+
  picker.addEventListener("change",async()=>{
   const newFile=picker.files?.[0];
   if(!newFile)return;
-  if(!confirm(`ต้องการแทนที่เนื้อหาไฟล์ "${displayNameOf(oldFile)}" ด้วย "${newFile.name}" หรือไม่?\n\nรายการเดิมและ Keys จะยังคงอยู่`))return;
+
+  if(!confirm("ต้องการแทนที่ไฟล์เดิมหรือไม่? Keys เดิมจะยังคงอยู่"))return;
 
   let uploadedPath=null;
+
   try{
    await requireSession();
-   const safeName=newFile.name.replace(/[\/\\]/g,"_");
-   uploadedPath=crypto.randomUUID()+"/"+safeName;
 
-   const {error:uploadError}=await supabaseClient.storage.from(STORAGE_BUCKET)
-    .upload(uploadedPath,newFile,{upsert:false,contentType:newFile.type||"application/octet-stream"});
+   uploadedPath=crypto.randomUUID()+"/"+newFile.name.replace(/[\/\\]/g,"_");
+
+   const {error:uploadError}=await supabaseClient.storage
+    .from(STORAGE_BUCKET).upload(uploadedPath,newFile,{
+     upsert:false,
+     contentType:newFile.type||"application/octet-stream"
+    });
+
    if(uploadError)throw uploadError;
 
-   const {data:updatedRows,error:updateError}=await supabaseClient.from("files")
+   const {data,error:updateError}=await supabaseClient.from("files")
     .update({name:newFile.name,storage_url:uploadedPath})
     .eq("id",fileId).is("deleted_at",null).select("id");
 
    if(updateError)throw updateError;
-   if(!updatedRows?.length)throw new Error("ไม่พบรายการที่ยังใช้งานอยู่ จึงไม่ได้เปลี่ยนไฟล์เดิม");
+   if(!data?.length)throw new Error("ไม่พบรายการไฟล์ที่ยังใช้งานอยู่");
 
-   const {error:removeError}=await supabaseClient.storage.from(STORAGE_BUCKET)
-    .remove([oldFile.storage_url]);
+   const {error:removeError}=await supabaseClient.storage
+    .from(STORAGE_BUCKET).remove([oldFile.storage_url]);
 
-   if(removeError){
-    alert("อัปเดตไฟล์ใหม่สำเร็จ แต่ลบไฟล์เก่าใน Storage ไม่สำเร็จ: "+removeError.message+
-     "\nรายการเดิมใช้งานไฟล์ใหม่แล้ว แต่ไฟล์เก่าอาจยังคงอยู่ใน Storage");
-   }else{
-    alert("อัปเดตไฟล์สำเร็จ Keys และประวัติเดิมยังคงอยู่");
-   }
    uploadedPath=null;
+
+   alert(removeError
+    ?"แทนที่ไฟล์สำเร็จ แต่ลบไฟล์เก่าไม่สำเร็จ: "+removeError.message
+    :"แทนที่ไฟล์สำเร็จ Keys เดิมยังคงอยู่");
+
   }catch(error){
-   alert("อัปเดตไฟล์ไม่สำเร็จ: "+error.message);
+   alert("แทนที่ไฟล์ไม่สำเร็จ: "+error.message);
   }finally{
    if(uploadedPath){
-    const {error:cleanupError}=await supabaseClient.storage.from(STORAGE_BUCKET).remove([uploadedPath]);
-    if(cleanupError)console.error("ลบไฟล์อัปโหลดที่ไม่สำเร็จไม่ได้",cleanupError);
+    await supabaseClient.storage.from(STORAGE_BUCKET).remove([uploadedPath]);
    }
    await refreshAll();
   }
  });
+
  picker.click();
 }
 
-/* ลบแบบ soft delete ก่อน แล้วจึงลบวัตถุใน Storage
-   จึงไม่ทำให้ไฟล์ที่ถูกลบยังถูกเลือกไปสร้าง Key ใหม่ */
+/* ปิดใช้งานไฟล์เดี่ยว */
 async function deleteFile(file){
- if(file.deleted_at){
-  if(!objectPathOf(file)){
-   alert("รายการนี้ถูกปิดใช้งานแล้ว และไม่มีไฟล์ใน Storage ให้ลบ");
-   return;
-  }
-  if(!confirm("รายการนี้ถูกปิดใช้งานแล้ว ต้องการลองลบไฟล์ใน Storage อีกครั้งหรือไม่?"))return;
-  try{
-   await requireSession();
-   const {error}=await supabaseClient.storage.from(STORAGE_BUCKET).remove([file.storage_url]);
-   if(error)throw error;
-   alert("ลบไฟล์ใน Storage แล้ว");
-  }catch(error){
-   alert("ลบไฟล์ใน Storage ไม่สำเร็จ: "+error.message);
-  }
-  await refreshAll();
-  return;
- }
-
- if(!confirm(`ต้องการลบ "${displayNameOf(file)}" หรือไม่?\n\nรายการจะถูกปิดใช้งานและไม่สามารถสร้าง Key ใหม่ได้\nKeys และประวัติการใช้งานเดิมจะยังคงอยู่`))return;
+ if(!confirm("ต้องการปิดใช้งานรายการนี้หรือไม่? Keys และประวัติเดิมจะยังอยู่"))return;
 
  try{
   await requireSession();
-  const {data:updatedRows,error:updateError}=await supabaseClient.from("files")
+
+  const {data,error}=await supabaseClient.from("files")
    .update({deleted_at:new Date().toISOString()})
    .eq("id",file.id).is("deleted_at",null).select("id");
 
-  if(updateError)throw updateError;
-  if(!updatedRows?.length)throw new Error("รายการนี้อาจถูกลบไปแล้ว หรือไม่มีสิทธิ์แก้ไข");
+  if(error)throw error;
+  if(!data?.length)throw new Error("รายการถูกปิดใช้งานไปแล้ว");
 
   if(objectPathOf(file)){
-   const {error:removeError}=await supabaseClient.storage.from(STORAGE_BUCKET).remove([file.storage_url]);
-   if(removeError){
-    alert("ปิดใช้งานรายการแล้ว แต่ลบไฟล์ออกจาก Storage ไม่สำเร็จ: "+removeError.message+
-     "\nรายการถูกปิดใช้งานแล้ว กดปุ่มลบไฟล์อีกครั้งเพื่อลองลบไฟล์ใน Storage ซ้ำ");
-   }else{
-    alert("ลบไฟล์สำเร็จ รายการถูกปิดใช้งานแล้ว และ Keys/ประวัติเดิมยังอยู่");
-   }
+   const {error:removeError}=await supabaseClient.storage
+    .from(STORAGE_BUCKET).remove([file.storage_url]);
+
+   if(removeError)alert("ปิดใช้งานแล้ว แต่ลบไฟล์จาก Storage ไม่สำเร็จ: "+removeError.message);
+   else alert("ปิดใช้งานและลบไฟล์สำเร็จ");
   }else{
-   alert("ปิดใช้งาน URL แล้ว Keys และประวัติเดิมยังอยู่");
+   alert("ปิดใช้งาน URL สำเร็จ");
   }
  }catch(error){
   alert("ลบไฟล์ไม่สำเร็จ: "+error.message);
  }
+
  await refreshAll();
 }
 
+/* แสดงรายการไฟล์เดี่ยว */
 async function loadFiles(){
  const container=$("fileList");
- container.replaceChildren(makeElement("div","กำลังโหลด..."));
+ container.textContent="กำลังโหลด...";
+
  const {data,error}=await supabaseClient.from("files")
   .select("id,name,display_name,storage_url,created_at,deleted_at")
   .order("created_at",{ascending:false});
+
  container.replaceChildren();
+
  if(error){container.textContent="โหลดไฟล์ไม่สำเร็จ: "+error.message;return;}
  if(!data?.length){container.textContent="ยังไม่มีไฟล์";return;}
 
  for(const file of data){
   const card=makeElement("div",null,"item");
   card.appendChild(makeElement("strong",displayNameOf(file)));
-  if(file.display_name?.trim()&&file.display_name.trim()!==file.name)
-   addLine(card,"ชื่อไฟล์จริง: "+(file.name||"-"));
+  addLine(card,"ชื่อไฟล์จริง: "+(file.name||"-"));
   addLine(card,"เพิ่มเมื่อ: "+formatDate(file.created_at));
-  addLine(card,isExternalUrl(file.storage_url)?"ประเภท: URL ภายนอก":"ประเภท: Supabase Private Storage");
+  addLine(card,isExternalUrl(file.storage_url)?"ประเภท: URL ภายนอก":"ประเภท: Private Storage");
 
   if(file.deleted_at){
-   addLine(card,"สถานะ: ปิดใช้งานแล้ว เมื่อ "+formatDate(file.deleted_at));
-   addLine(card,"Keys และประวัติเดิมยังคงเก็บไว้");
-   if(objectPathOf(file)){
-    card.appendChild(makeButton("ลบไฟล์ใน Storage ซ้ำ",()=>deleteFile(file),"danger"));
-   }
+   addLine(card,"สถานะ: ปิดใช้งานแล้ว");
   }else{
    addLine(card,"สถานะ: พร้อมใช้งาน");
    const actions=makeElement("div",null,"item-actions");
-   const openButton=makeButton("เปิด / ดาวน์โหลด",async()=>{
-    openButton.disabled=true;
+
+   actions.appendChild(makeButton("เปิด / ดาวน์โหลด",async()=>{
     try{
      const link=await getFileLink(file);
      window.open(link,"_blank","noopener,noreferrer");
     }catch(error){alert("เปิดไฟล์ไม่สำเร็จ: "+error.message);}
-    finally{openButton.disabled=false;}
-   });
-   actions.appendChild(openButton);
+   }));
+
    if(!isExternalUrl(file.storage_url))
-    actions.appendChild(makeButton("อัปเดตไฟล์",()=>replaceFile(file.id,file)));
-   actions.appendChild(makeButton("ลบไฟล์",()=>deleteFile(file),"danger"));
+    actions.appendChild(makeButton("แทนที่ไฟล์",()=>replaceFile(file.id,file)));
+
+   actions.appendChild(makeButton("ปิดใช้งาน",()=>deleteFile(file),"danger"));
    card.appendChild(actions);
   }
+
   container.appendChild(card);
  }
 }
 
+/* แสดงรายการโฟลเดอร์ */
+async function loadFolders(){
+ const container=$("folderList");
+ container.textContent="กำลังโหลดโฟลเดอร์...";
+
+ const {data:folders,error}=await supabaseClient.from("file_folders")
+  .select("id,name,display_name,storage_path,created_at,deleted_at")
+  .order("created_at",{ascending:false});
+
+ if(error){container.textContent="โหลดโฟลเดอร์ไม่สำเร็จ: "+error.message;return;}
+
+ const {data:children,error:childrenError}=await supabaseClient
+  .from("folder_files").select("folder_id,name");
+
+ if(childrenError){container.textContent="โหลดไฟล์ย่อยไม่สำเร็จ: "+childrenError.message;return;}
+
+ container.replaceChildren();
+
+ if(!folders?.length){container.textContent="ยังไม่มีโฟลเดอร์";return;}
+
+ for(const folder of folders){
+  const folderChildren=(children||[]).filter(row=>row.folder_id===folder.id);
+  const card=makeElement("div",null,"item");
+
+  card.appendChild(makeElement("strong","📂 "+displayNameOf(folder)));
+  addLine(card,"ชื่อโฟลเดอร์จริง: "+folder.name);
+  addLine(card,"จำนวนไฟล์ภายใน: "+folderChildren.length);
+  addLine(card,"เพิ่มเมื่อ: "+formatDate(folder.created_at));
+
+  if(folder.deleted_at){
+   addLine(card,"สถานะ: ปิดใช้งานแล้ว");
+   container.appendChild(card);
+   continue;
+  }
+
+  addLine(card,"สถานะ: พร้อมใช้งาน");
+
+  const contents=makeElement("div");
+  contents.style.display="none";
+
+  const toggle=makeButton("ดูไฟล์ภายใน",()=>{
+   contents.style.display=contents.style.display==="none"?"block":"none";
+   toggle.textContent=contents.style.display==="none"?"ดูไฟล์ภายใน":"ซ่อนรายการไฟล์";
+  });
+
+  card.appendChild(toggle);
+
+  for(const child of folderChildren.sort((a,b)=>a.name.localeCompare(b.name))){
+   addLine(contents,"📄 "+child.name);
+  }
+
+  card.appendChild(contents);
+
+  card.appendChild(makeButton("ปิดใช้งานโฟลเดอร์",()=>deleteFolder(folder),"danger"));
+
+  container.appendChild(card);
+ }
+}
+
+/* ปิดใช้งานโฟลเดอร์และลบไฟล์ใน Storage */
+async function deleteFolder(folder){
+ if(!confirm(
+  `ต้องการปิดใช้งานโฟลเดอร์ "${displayNameOf(folder)}" หรือไม่?\n`+
+  "Keys และประวัติเดิมจะยังคงอยู่"
+ ))return;
+
+ try{
+  await requireSession();
+
+  const {data:updated,error:updateError}=await supabaseClient
+   .from("file_folders")
+   .update({deleted_at:new Date().toISOString()})
+   .eq("id",folder.id).is("deleted_at",null).select("id");
+
+  if(updateError)throw updateError;
+  if(!updated?.length)throw new Error("โฟลเดอร์นี้ถูกปิดใช้งานไปแล้ว");
+
+  const {data:children,error:childrenError}=await supabaseClient
+   .from("folder_files").select("storage_path").eq("folder_id",folder.id);
+
+  if(childrenError)throw childrenError;
+
+  const paths=(children||[]).map(row=>row.storage_path).filter(Boolean);
+
+  if(paths.length){
+   const {error:removeError}=await supabaseClient.storage
+    .from(STORAGE_BUCKET).remove(paths);
+
+   if(removeError){
+    alert("ปิดใช้งานโฟลเดอร์แล้ว แต่ลบไฟล์บางส่วนไม่สำเร็จ: "+removeError.message);
+   }else{
+    alert("ปิดใช้งานโฟลเดอร์และลบไฟล์ใน Storage แล้ว");
+   }
+  }else{
+   alert("ปิดใช้งานโฟลเดอร์แล้ว");
+  }
+ }catch(error){
+  alert("ปิดใช้งานโฟลเดอร์ไม่สำเร็จ: "+error.message);
+ }
+
+ await refreshAll();
+}
+
+/* รายการเป้าหมายสำหรับสร้าง Key */
 async function loadKeyFiles(){
- const select=$("keyFile");
+ const select=$("keyTarget");
  select.replaceChildren();
- const {data,error}=await supabaseClient.from("files")
-  .select("id,name,display_name,deleted_at")
-  .is("deleted_at",null).order("name");
- if(error){select.add(new Option("โหลดไฟล์ไม่สำเร็จ",""));console.error(error);return;}
- if(!data?.length){select.add(new Option("ยังไม่มีไฟล์ที่ใช้งานได้",""));return;}
- select.add(new Option("-- เลือกไฟล์ --",""));
- data.forEach(file=>select.add(new Option(displayNameOf(file),file.id)));
+ select.add(new Option("-- เลือกไฟล์หรือโฟลเดอร์ --",""));
+
+ const [filesResult,foldersResult]=await Promise.all([
+  supabaseClient.from("files")
+   .select("id,name,display_name")
+   .is("deleted_at",null).order("name"),
+
+  supabaseClient.from("file_folders")
+   .select("id,name,display_name")
+   .is("deleted_at",null).order("name")
+ ]);
+
+ if(filesResult.error||foldersResult.error){
+  select.replaceChildren(new Option("โหลดรายการไม่สำเร็จ",""));
+  console.error(filesResult.error,foldersResult.error);
+  return;
+ }
+
+ for(const file of filesResult.data||[]){
+  select.add(new Option("📄 "+displayNameOf(file),"file:"+file.id));
+ }
+
+ for(const folder of foldersResult.data||[]){
+  select.add(new Option("📂 "+displayNameOf(folder),"folder:"+folder.id));
+ }
 }
 
 function createRandomKey(){
@@ -494,27 +824,46 @@ function createRandomKey(){
  const values=new Uint32Array(16);
  crypto.getRandomValues(values);
  let key="";
- for(let i=0;i<16;i++){
+
+ for(let i=0;i<values.length;i++){
   if(i>0&&i%4===0)key+="-";
   key+=chars[values[i]%chars.length];
  }
+
  return key;
 }
 
 async function generateKey(){
- const fileId=$("keyFile").value;
- if(!fileId){alert("กรุณาเลือกไฟล์ก่อน");return;}
+ const value=$("keyTarget").value;
+ if(!value){alert("กรุณาเลือกไฟล์หรือโฟลเดอร์ก่อน");return;}
+
+ const [type,targetId]=value.split(":");
+ if(!["file","folder"].includes(type)||!targetId){
+  alert("รายการที่เลือกไม่ถูกต้อง");
+  return;
+ }
+
  try{
   await requireSession();
-  const {data:file,error:fileError}=await supabaseClient.from("files")
-   .select("id").eq("id",fileId).is("deleted_at",null).maybeSingle();
-  if(fileError)throw fileError;
-  if(!file){alert("ไฟล์นี้ถูกลบหรือปิดใช้งานแล้ว กรุณาเลือกไฟล์ใหม่");await loadKeyFiles();return;}
+
+  const table=type==="file"?"files":"file_folders";
+  const {data:target,error:targetError}=await supabaseClient
+   .from(table).select("id").eq("id",targetId)
+   .is("deleted_at",null).maybeSingle();
+
+  if(targetError)throw targetError;
+  if(!target){alert("รายการนี้ถูกปิดใช้งานแล้ว");await loadKeyFiles();return;}
 
   const keyCode=createRandomKey();
-  const {error}=await supabaseClient.from("keys").insert({
-   key_code:keyCode,file_id:fileId,status:"unused"
-  });
+
+  const payload={
+   key_code:keyCode,
+   status:"unused",
+   file_id:type==="file"?targetId:null,
+   folder_id:type==="folder"?targetId:null
+  };
+
+  const {error}=await supabaseClient.from("keys").insert(payload);
   if(error)throw error;
 
   const box=$("generatedKey");
@@ -522,63 +871,123 @@ async function generateKey(){
   box.style.display="block";
   box.appendChild(makeElement("strong","สร้าง Key สำเร็จ"));
   addLine(box,keyCode);
+  addLine(box,"ประเภท: "+(type==="file"?"ไฟล์เดี่ยว":"โฟลเดอร์"));
+
   box.appendChild(makeButton("คัดลอก Key",async()=>{
-   try{await navigator.clipboard.writeText(keyCode);alert("คัดลอก Key แล้ว");}
-   catch{alert("คัดลอกอัตโนมัติไม่ได้ กรุณาคัดลอกข้อความ Key ด้วยตนเอง");}
+   try{
+    await navigator.clipboard.writeText(keyCode);
+    alert("คัดลอก Key แล้ว");
+   }catch{
+    alert("คัดลอกอัตโนมัติไม่สำเร็จ กรุณาคัดลอก Key ด้วยตนเอง");
+   }
   }));
+
   await Promise.all([loadKeys(),loadStats()]);
+
  }catch(error){
   alert("สร้าง Key ไม่สำเร็จ: "+error.message);
   console.error(error);
  }
 }
 
+/* รายการ Keys รองรับทั้งไฟล์และโฟลเดอร์ */
 async function loadKeys(){
  const container=$("keyList");
  container.textContent="กำลังโหลด...";
+
  const {data,error}=await supabaseClient.from("keys")
-  .select(`id,key_code,status,first_ip,first_used_at,created_at,file_id,files(name,display_name,deleted_at)`)
+  .select(`
+   id,key_code,status,first_ip,first_used_at,created_at,file_id,folder_id,
+   files(name,display_name,deleted_at),
+   file_folders(name,display_name,deleted_at)
+  `)
   .order("created_at",{ascending:false});
+
  container.replaceChildren();
- if(error){container.textContent="โหลด Keys ไม่สำเร็จ: "+error.message;console.error(error);return;}
+
+ if(error){
+  container.textContent="โหลด Keys ไม่สำเร็จ: "+error.message;
+  console.error(error);
+  return;
+ }
+
  if(!data?.length){container.textContent="ยังไม่มี Key";return;}
- data.forEach(key=>{
+
+ for(const key of data){
   const card=makeElement("div",null,"item");
   card.appendChild(makeElement("strong",key.key_code||"-"));
-  addLine(card,"ไฟล์: "+displayNameOf(key.files||{}));
-  if(key.files?.display_name?.trim()&&key.files.display_name.trim()!==key.files.name)
-   addLine(card,"ชื่อไฟล์จริง: "+(key.files.name||"-"));
-  if(key.files?.deleted_at)addLine(card,"หมายเหตุ: ไฟล์ที่ผูกไว้ถูกปิดใช้งานแล้ว");
+
+  if(key.folder_id){
+   const folder=key.file_folders;
+   addLine(card,"ประเภท: โฟลเดอร์");
+   addLine(card,"โฟลเดอร์: "+displayNameOf(folder||{}));
+   if(folder?.deleted_at)addLine(card,"หมายเหตุ: โฟลเดอร์ถูกปิดใช้งานแล้ว");
+  }else{
+   const file=key.files;
+   addLine(card,"ประเภท: ไฟล์เดี่ยว");
+   addLine(card,"ไฟล์: "+displayNameOf(file||{}));
+   if(file?.deleted_at)addLine(card,"หมายเหตุ: ไฟล์ถูกปิดใช้งานแล้ว");
+  }
+
   addLine(card,"สถานะ Key: "+(key.status||"unused"));
   addLine(card,"First IP: "+(key.first_ip||"-"));
   addLine(card,"First Used: "+formatDate(key.first_used_at));
   addLine(card,"สร้างเมื่อ: "+formatDate(key.created_at));
+
   container.appendChild(card);
- });
+ }
 }
 
+/* ประวัติรองรับทั้งไฟล์และโฟลเดอร์ */
 async function loadUsageHistory(){
  const container=$("usageHistory");
  container.textContent="กำลังโหลดประวัติ...";
+
  const {data,error}=await supabaseClient.from("key_uses")
-  .select(`id,ip_address,use_number,used_at,keys(key_code,files(name,display_name,deleted_at))`)
-  .order("used_at",{ascending:false}).limit(100);
+  .select(`
+   id,ip_address,use_number,used_at,
+   keys(
+    key_code,file_id,folder_id,
+    files(name,display_name,deleted_at),
+    file_folders(name,display_name,deleted_at)
+   )
+  `)
+  .order("used_at",{ascending:false})
+  .limit(100);
+
  container.replaceChildren();
- if(error){container.textContent="โหลดประวัติไม่สำเร็จ: "+error.message;console.error(error);return;}
+
+ if(error){
+  container.textContent="โหลดประวัติไม่สำเร็จ: "+error.message;
+  console.error(error);
+  return;
+ }
+
  if(!data?.length){container.textContent="ยังไม่มีประวัติการใช้งาน";return;}
- data.forEach(item=>{
+
+ for(const item of data){
   const card=makeElement("div",null,"item");
-  const file=item.keys?.files;
-  addLine(card,"ไฟล์: "+displayNameOf(file||{}));
-  if(file?.display_name?.trim()&&file.display_name.trim()!==file.name)
-   addLine(card,"ชื่อไฟล์จริง: "+(file.name||"-"));
-  if(file?.deleted_at)addLine(card,"หมายเหตุ: ไฟล์นี้ถูกปิดใช้งานแล้ว");
-  addLine(card,"Key: "+(item.keys?.key_code||"-"));
+  const key=item.keys;
+
+  if(key?.folder_id){
+   const folder=key.file_folders;
+   addLine(card,"ประเภท: โฟลเดอร์");
+   addLine(card,"โฟลเดอร์: "+displayNameOf(folder||{}));
+   if(folder?.deleted_at)addLine(card,"หมายเหตุ: โฟลเดอร์ถูกปิดใช้งานแล้ว");
+  }else{
+   const file=key?.files;
+   addLine(card,"ประเภท: ไฟล์เดี่ยว");
+   addLine(card,"ไฟล์: "+displayNameOf(file||{}));
+   if(file?.deleted_at)addLine(card,"หมายเหตุ: ไฟล์ถูกปิดใช้งานแล้ว");
+  }
+
+  addLine(card,"Key: "+(key?.key_code||"-"));
   addLine(card,"IP: "+(item.ip_address||"-"));
   addLine(card,"ครั้งที่: "+(item.use_number??"-"));
   addLine(card,"เวลา: "+formatDate(item.used_at));
+
   container.appendChild(card);
- });
+ }
 }
 
 checkSession();
