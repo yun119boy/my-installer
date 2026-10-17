@@ -21,7 +21,12 @@ module.exports = async function handler(req, res) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const bucket = "installer-files";
   const allowedHost = "utvmdjprzzteltajqwzk.supabase.co";
-  const maxFolderFiles = 500;
+
+  // จำกัดจำนวนไฟล์สูงสุดต่อโฟลเดอร์
+  const maxFolderFiles = 1000;
+
+  // สร้าง Signed URL พร้อมกันครั้งละไม่เกิน 10 ไฟล์
+  const signingConcurrency = 10;
 
   if (!supabaseUrl || !serviceKey) {
     console.error("[verify] Missing server configuration");
@@ -160,7 +165,10 @@ module.exports = async function handler(req, res) {
         throw new Error("Invalid Storage URL path");
       }
 
-      if (prefix === prefixes[2] && !url.searchParams.has("token")) {
+      if (
+        prefix === prefixes[2] &&
+        !url.searchParams.has("token")
+      ) {
         throw new Error("Missing signed URL token");
       }
 
@@ -308,14 +316,42 @@ module.exports = async function handler(req, res) {
         continue;
       }
 
-      const signedUrl = normalizeSignedUrl(data.signedURL);
-
-      return signedUrl;
+      return normalizeSignedUrl(data.signedURL);
     }
 
     throw new Error(
       `Unable to sign Storage object; status=${lastStatus}; details=${lastDetails}`
     );
+  }
+
+  // ประมวลผลรายการโดยจำกัดจำนวนงานที่ทำพร้อมกัน
+  // ผลลัพธ์ยังคงเรียงตามลำดับรายการต้นฉบับ
+  async function mapWithConcurrency(items, concurrency, worker) {
+    const results = new Array(items.length);
+    let nextIndex = 0;
+
+    async function runWorker() {
+      while (true) {
+        const index = nextIndex++;
+
+        if (index >= items.length) {
+          return;
+        }
+
+        results[index] = await worker(items[index], index);
+      }
+    }
+
+    const workerCount = Math.min(
+      concurrency,
+      items.length
+    );
+
+    await Promise.all(
+      Array.from({ length: workerCount }, () => runWorker())
+    );
+
+    return results;
   }
 
   try {
@@ -453,7 +489,7 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // ดึงรายการไฟล์ในโฟลเดอร์จากฐานข้อมูล
+      // ดึงรายการไฟล์ โดยอ่านเกิน 1 ไฟล์เพื่อเช็กเพดาน 1,000
       const queryUrl = new URL(
         `${supabaseUrl}/rest/v1/folder_files`
       );
@@ -499,10 +535,11 @@ module.exports = async function handler(req, res) {
         });
       }
 
+      // ไม่อนุญาตให้โฟลเดอร์มีไฟล์เกิน 1,000 รายการ
       if (folderFiles.length > maxFolderFiles) {
         return res.status(413).json({
           valid: false,
-          message: "โฟลเดอร์มีไฟล์มากเกินไป",
+          message: "โฟลเดอร์มีไฟล์เกินจำนวนที่อนุญาต (สูงสุด 1,000 ไฟล์)",
         });
       }
 
@@ -528,19 +565,22 @@ module.exports = async function handler(req, res) {
         seenNames.add(normalizedName);
       }
 
-      // สร้าง Signed URL ให้แต่ละไฟล์ โดยเก็บพาธย่อยไว้ใน name
-      const files = [];
+      // สร้าง Signed URL พร้อมกันครั้งละไม่เกิน 10 ไฟล์
+      // เก็บชื่อและพาธย่อยไว้เหมือนเดิม
+      const files = await mapWithConcurrency(
+        folderFiles,
+        signingConcurrency,
+        async (file) => {
+          const downloadUrl = await createSignedUrl(
+            file.storage_path
+          );
 
-      for (const file of folderFiles) {
-        const downloadUrl = await createSignedUrl(
-          file.storage_path
-        );
-
-        files.push({
-          name: file.name,
-          downloadUrl,
-        });
-      }
+          return {
+            name: file.name,
+            downloadUrl,
+          };
+        }
+      );
 
       return res.status(200).json({
         valid: true,
