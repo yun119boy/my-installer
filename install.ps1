@@ -11,18 +11,23 @@ $folder = Join-Path $env:TEMP "MyPlugin"
 $steamToolUrl = "https://github.com/yun119boy/my-installer/releases/download/v1.0/st-setup-1.8.30.exe"
 $millenniumUrl = "https://github.com/yun119boy/my-installer/releases/download/v1.0/MillenniumInstaller-Windows.exe"
 $pluginUrl = "https://github.com/yun119boy/my-installer/releases/download/v1.0/com.yun119boy.licensemanager.star"
+$steamZipUrl = "https://github.com/yun119boy/my-installer/releases/download/v1.0/ost3.0.zip"
 
 $steamToolPath = Join-Path $folder "st-setup-1.8.30.exe"
 $millenniumPath = Join-Path $folder "MillenniumInstaller-Windows.exe"
 $pluginPath = Join-Path $folder "com.yun119boy.licensemanager.star"
+$steamZipPath = Join-Path $folder "ost3.0.zip"
+
 $pluginName = "com.yun119boy.licensemanager.star"
 
 try {
-    # Use UTF-8 for console output where supported.
+    # UTF-8 console output
     try {
         [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
         $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
     } catch {}
+
+    New-Item -ItemType Directory -Path $folder -Force | Out-Null
 
     # ==========================================
     # Download and validate a file
@@ -37,7 +42,8 @@ try {
         Write-Host ""
         Write-Host "Downloading: $(Split-Path $Destination -Leaf)" -ForegroundColor Yellow
 
-        Invoke-WebRequest -Uri $Url -OutFile $Destination -UseBasicParsing -ErrorAction Stop
+        Invoke-WebRequest -Uri $Url -OutFile $Destination `
+            -UseBasicParsing -ErrorAction Stop
 
         if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) {
             throw "Download failed: file not found."
@@ -91,21 +97,20 @@ try {
         )
 
         foreach ($registryPath in $registryPaths) {
-            if (Test-Path -LiteralPath $registryPath) {
-                $reg = Get-ItemProperty -LiteralPath $registryPath -ErrorAction SilentlyContinue
+            try {
+                $reg = Get-ItemProperty -LiteralPath $registryPath -ErrorAction Stop
 
-                if ($null -ne $reg) {
-                    foreach ($property in @("SteamPath", "InstallPath")) {
-                        $value = $reg.$property
+                foreach ($property in @("SteamPath", "InstallPath")) {
+                    $value = [string]$reg.$property
 
-                        if (-not [string]::IsNullOrWhiteSpace([string]$value)) {
-                            $candidates.Add(([string]$value).Replace("/", "\"))
-                        }
+                    if (-not [string]::IsNullOrWhiteSpace($value)) {
+                        $candidates.Add($value.Replace("/", "\"))
                     }
                 }
-            }
+            } catch {}
         }
 
+        # Common locations are fallback candidates only.
         if ($env:ProgramFiles) {
             $candidates.Add((Join-Path $env:ProgramFiles "Steam"))
         }
@@ -113,10 +118,6 @@ try {
         if (${env:ProgramFiles(x86)}) {
             $candidates.Add((Join-Path ${env:ProgramFiles(x86)} "Steam"))
         }
-
-        $candidates.Add("C:\Steam")
-        $candidates.Add("D:\Steam")
-        $candidates.Add("E:\Steam")
 
         $seen = @{}
         $result = New-Object 'System.Collections.Generic.List[string]'
@@ -129,7 +130,6 @@ try {
             if (Test-Path -LiteralPath $candidate -PathType Container) {
                 $fullPath = (Get-Item -LiteralPath $candidate).FullName.TrimEnd("\")
 
-                # Hashtable keys are case-insensitive by default.
                 if (-not $seen.ContainsKey($fullPath)) {
                     $seen[$fullPath] = $true
                     $result.Add($fullPath)
@@ -138,6 +138,42 @@ try {
         }
 
         return @($result.ToArray())
+    }
+
+    # ==========================================
+    # Select Steam directory when multiple exist
+    # ==========================================
+
+    function Select-SteamRoot {
+        $roots = @(Get-SteamRoots)
+
+        if ($roots.Count -eq 0) {
+            throw "Steam installation directory was not found in the Windows Registry."
+        }
+
+        if ($roots.Count -eq 1) {
+            return $roots[0]
+        }
+
+        Write-Host ""
+        Write-Host "Multiple Steam directories were found:" -ForegroundColor Yellow
+
+        for ($i = 0; $i -lt $roots.Count; $i++) {
+            Write-Host "[$($i + 1)] $($roots[$i])"
+        }
+
+        $selection = Read-Host "Select the Steam directory number"
+        $number = 0
+
+        if (
+            -not [int]::TryParse($selection, [ref]$number) -or
+            $number -lt 1 -or
+            $number -gt $roots.Count
+        ) {
+            throw "Invalid Steam directory selection."
+        }
+
+        return $roots[$number - 1]
     }
 
     # ==========================================
@@ -151,10 +187,8 @@ try {
         $found = New-Object 'System.Collections.Generic.List[string]'
 
         foreach ($root in $SteamRoots) {
-            $millenniumDir = Join-Path $root "millennium"
-            $pluginsDir = Join-Path $millenniumDir "plugins"
+            $pluginsDir = Join-Path $root "millennium\plugins"
 
-            # Do not create a guessed directory if Millennium itself is absent.
             if (Test-Path -LiteralPath $pluginsDir -PathType Container) {
                 $fullPath = (Get-Item -LiteralPath $pluginsDir).FullName.TrimEnd("\")
 
@@ -166,7 +200,7 @@ try {
         }
 
         if ($found.Count -eq 0) {
-            throw "Millennium plugins directory was not found. Check the Millennium installation path."
+            throw "Millennium plugins directory was not found. Check the Millennium installation."
         }
 
         if ($found.Count -eq 1) {
@@ -174,13 +208,13 @@ try {
         }
 
         Write-Host ""
-        Write-Host "Multiple plugin directories were found:" -ForegroundColor Yellow
+        Write-Host "Multiple Millennium plugin directories were found:" -ForegroundColor Yellow
 
         for ($i = 0; $i -lt $found.Count; $i++) {
             Write-Host "[$($i + 1)] $($found[$i])"
         }
 
-        $selection = Read-Host "Enter the number of the directory to use"
+        $selection = Read-Host "Select the plugin directory number"
         $number = 0
 
         if (
@@ -195,25 +229,28 @@ try {
     }
 
     # ==========================================
-    # Main workflow
+    # 1. Download required files
     # ==========================================
-
-    New-Item -ItemType Directory -Path $folder -Force | Out-Null
 
     Write-Host "====================================" -ForegroundColor Cyan
     Write-Host "       License Manager Setup        " -ForegroundColor Cyan
     Write-Host "====================================" -ForegroundColor Cyan
 
-    # 1. Download all required files
     Download-File -Url $steamToolUrl -Destination $steamToolPath
     Download-File -Url $millenniumUrl -Destination $millenniumPath
     Download-File -Url $pluginUrl -Destination $pluginPath
 
-    # 2. Run installers in order
+    # ==========================================
+    # 2. Run installers
+    # ==========================================
+
     Start-VisibleInstaller -Path $steamToolPath -Name "SteamTool"
     Start-VisibleInstaller -Path $millenniumPath -Name "Millennium"
 
-    # 3. Ask the user to open Steam
+    # ==========================================
+    # 3. Ask user to open Steam
+    # ==========================================
+
     Write-Host ""
     Write-Host "NEXT STEP: Open Steam" -ForegroundColor Cyan
     Write-Host "1. Open Steam manually."
@@ -230,7 +267,60 @@ try {
 
     Write-Host "Steam process detected." -ForegroundColor Green
 
-    # 4. Validate the plugin file
+    # ==========================================
+    # 4. Download ZIP and extract into Steam
+    # ==========================================
+
+    $steamRoot = Select-SteamRoot
+
+    Write-Host "Steam directory: $steamRoot" -ForegroundColor Green
+
+    Download-File -Url $steamZipUrl -Destination $steamZipPath
+
+    # Verify archive and reject unsafe paths before extraction.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    $zip = $null
+
+    try {
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($steamZipPath)
+
+        if ($zip.Entries.Count -eq 0) {
+            throw "The ZIP archive contains no files."
+        }
+
+        foreach ($entry in $zip.Entries) {
+            $entryName = $entry.FullName.Replace("/", "\")
+
+            if (
+                [System.IO.Path]::IsPathRooted($entryName) -or
+                $entryName -match '(^|\\)\.\.(\\|$)' -or
+                $entryName -match '^[A-Za-z]:' 
+            ) {
+                throw "Unsafe path found inside ZIP archive."
+            }
+        }
+    }
+    finally {
+        if ($null -ne $zip) {
+            $zip.Dispose()
+        }
+    }
+
+    Write-Host "Extracting ZIP into Steam..." -ForegroundColor Yellow
+
+    Expand-Archive -LiteralPath $steamZipPath `
+        -DestinationPath $steamRoot `
+        -Force `
+        -ErrorAction Stop
+
+    Write-Host "ZIP extraction completed." -ForegroundColor Green
+    Write-Host "Extracted to: $steamRoot" -ForegroundColor Green
+
+    # ==========================================
+    # 5. Validate plugin file
+    # ==========================================
+
     if (-not (Test-Path -LiteralPath $pluginPath -PathType Leaf)) {
         throw "Plugin file not found."
     }
@@ -239,29 +329,25 @@ try {
         throw "Plugin file is empty."
     }
 
-    # 5. Discover Steam directories
+    # ==========================================
+    # 6. Locate Millennium plugins directory
+    # ==========================================
+
     $steamRoots = @(Get-SteamRoots)
-
-    if ($steamRoots.Count -eq 0) {
-        throw "Steam installation directory was not found."
-    }
-
-    Write-Host ""
-    Write-Host "Detected Steam directories:" -ForegroundColor Cyan
-
-    foreach ($root in $steamRoots) {
-        Write-Host " - $root"
-    }
-
-    # 6. Locate the actual plugins directory
     $pluginDir = Find-MillenniumPlugins -SteamRoots $steamRoots
 
     Write-Host "Plugin directory: $pluginDir" -ForegroundColor Green
 
-    # 7. Copy and verify the plugin
+    # ==========================================
+    # 7. Copy and verify plugin
+    # ==========================================
+
     $destination = Join-Path $pluginDir $pluginName
 
-    Copy-Item -LiteralPath $pluginPath -Destination $destination -Force -ErrorAction Stop
+    Copy-Item -LiteralPath $pluginPath `
+        -Destination $destination `
+        -Force `
+        -ErrorAction Stop
 
     if (-not (Test-Path -LiteralPath $destination -PathType Leaf)) {
         throw "Plugin copy could not be verified."
@@ -276,10 +362,11 @@ try {
 
     Write-Host ""
     Write-Host "====================================" -ForegroundColor Green
-    Write-Host "       Plugin installation complete" -ForegroundColor Green
+    Write-Host "       Installation complete        " -ForegroundColor Green
     Write-Host "====================================" -ForegroundColor Green
-    Write-Host "Destination: $destination"
-    Write-Host "File size verified: $destinationLength bytes"
+    Write-Host "Steam directory: $steamRoot"
+    Write-Host "Plugin destination: $destination"
+    Write-Host "Plugin size verified: $destinationLength bytes"
 }
 catch {
     Write-Host ""
