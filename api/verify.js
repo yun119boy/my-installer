@@ -21,11 +21,7 @@ module.exports = async function handler(req, res) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const bucket = "installer-files";
   const allowedHost = "utvmdjprzzteltajqwzk.supabase.co";
-
-  // จำกัดจำนวนไฟล์สูงสุดต่อโฟลเดอร์
   const maxFolderFiles = 1000;
-
-  // สร้าง Signed URL พร้อมกันครั้งละไม่เกิน 10 ไฟล์
   const signingConcurrency = 10;
 
   if (!supabaseUrl || !serviceKey) {
@@ -86,8 +82,7 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // ตรวจสอบชื่อไฟล์และพาธสัมพัทธ์สำหรับโฟลเดอร์
-  // ตัวอย่างที่อนุญาต: modules/helper.lua
+  // ตรวจสอบชื่อไฟล์และพาธสัมพัทธ์
   function isSafeRelativePath(value) {
     if (
       typeof value !== "string" ||
@@ -118,13 +113,11 @@ module.exports = async function handler(req, res) {
 
       const stem = part.split(".")[0].toUpperCase();
 
-      return !/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(
-        stem
-      );
+      return !/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(stem);
     });
   }
 
-  // แปลง Storage URL ให้เป็น path ภายใน bucket
+  // แปลง Storage URL เป็น path ภายใน bucket
   function normalizeStoragePath(value) {
     if (typeof value !== "string" || !value.trim()) {
       throw new Error("Missing storage path");
@@ -207,7 +200,7 @@ module.exports = async function handler(req, res) {
     return { path, segments };
   }
 
-  // ตรวจสอบ Signed URL ที่ Supabase สร้างขึ้น
+  // ตรวจสอบ Signed URL ที่ Supabase สร้าง
   function normalizeSignedUrl(value) {
     if (typeof value !== "string" || !value.trim()) {
       throw new Error("Supabase returned an empty signed URL");
@@ -267,7 +260,6 @@ module.exports = async function handler(req, res) {
     }
 
     const uniqueCandidates = [...new Set(candidates)];
-
     let lastStatus = 0;
     let lastDetails = "";
 
@@ -286,9 +278,7 @@ module.exports = async function handler(req, res) {
             apikey: serviceKey,
             Authorization: `Bearer ${serviceKey}`,
           },
-          body: JSON.stringify({
-            expiresIn: 86400,
-          }),
+          body: JSON.stringify({ expiresIn: 86400 }),
         }
       );
 
@@ -298,7 +288,6 @@ module.exports = async function handler(req, res) {
 
         console.error("[verify] Signed URL attempt failed:", {
           status: lastStatus,
-          path: candidate,
           details: lastDetails,
         });
 
@@ -325,7 +314,6 @@ module.exports = async function handler(req, res) {
   }
 
   // ประมวลผลรายการโดยจำกัดจำนวนงานที่ทำพร้อมกัน
-  // ผลลัพธ์ยังคงเรียงตามลำดับรายการต้นฉบับ
   async function mapWithConcurrency(items, concurrency, worker) {
     const results = new Array(items.length);
     let nextIndex = 0;
@@ -334,18 +322,13 @@ module.exports = async function handler(req, res) {
       while (true) {
         const index = nextIndex++;
 
-        if (index >= items.length) {
-          return;
-        }
+        if (index >= items.length) return;
 
         results[index] = await worker(items[index], index);
       }
     }
 
-    const workerCount = Math.min(
-      concurrency,
-      items.length
-    );
+    const workerCount = Math.min(concurrency, items.length);
 
     await Promise.all(
       Array.from({ length: workerCount }, () => runWorker())
@@ -356,7 +339,6 @@ module.exports = async function handler(req, res) {
 
   try {
     const forwarded = req.headers["x-forwarded-for"];
-
     const ip =
       typeof forwarded === "string"
         ? forwarded.split(",")[0].trim()
@@ -394,7 +376,6 @@ module.exports = async function handler(req, res) {
     }
 
     const rawResult = await rpcResponse.json();
-
     const result = Array.isArray(rawResult)
       ? rawResult[0]
       : rawResult;
@@ -406,7 +387,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 2. รองรับ License แบบไฟล์เดี่ยว
+    // 2. License แบบไฟล์เดี่ยว
     if (result.type === "file" || !result.type) {
       const fileName =
         typeof result.fileName === "string"
@@ -433,7 +414,7 @@ module.exports = async function handler(req, res) {
         parsedUrl = null;
       }
 
-      // อนุญาตเฉพาะ GitHub Release ตาม URL ที่กำหนด
+      // อนุญาตเฉพาะ GitHub Release ที่กำหนด
       if (
         parsedUrl &&
         parsedUrl.protocol === "https:" &&
@@ -467,7 +448,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 3. รองรับ License แบบโฟลเดอร์
+    // 3. License แบบโฟลเดอร์
     if (result.type === "folder") {
       const folderId = result.folderId;
 
@@ -489,7 +470,7 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // ดึงรายการไฟล์ โดยอ่านเกิน 1 ไฟล์เพื่อเช็กเพดาน 1,000
+      // ดึงรายการไฟล์และตรวจเพดาน 1,000 รายการ
       const queryUrl = new URL(
         `${supabaseUrl}/rest/v1/folder_files`
       );
@@ -535,7 +516,6 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // ไม่อนุญาตให้โฟลเดอร์มีไฟล์เกิน 1,000 รายการ
       if (folderFiles.length > maxFolderFiles) {
         return res.status(413).json({
           valid: false,
@@ -543,30 +523,48 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // ตรวจสอบข้อมูลทั้งหมดก่อนสร้าง Signed URL
+      // ตรวจสอบข้อมูลทุกแถวและบันทึกสาเหตุใน Vercel Logs
       const seenNames = new Set();
 
-      for (const file of folderFiles) {
-        if (
-          !isSafeRelativePath(file.name) ||
-          typeof file.storage_path !== "string" ||
-          !file.storage_path.trim()
-        ) {
+      for (let i = 0; i < folderFiles.length; i++) {
+        const file = folderFiles[i];
+
+        const validName = isSafeRelativePath(file?.name);
+        const validStoragePath =
+          typeof file?.storage_path === "string" &&
+          file.storage_path.trim().length > 0;
+
+        if (!validName || !validStoragePath) {
+          console.error("[verify] Invalid folder file record:", {
+            index: i,
+            recordIsObject:
+              file !== null &&
+              typeof file === "object" &&
+              !Array.isArray(file),
+            nameType: typeof file?.name,
+            validName,
+            storagePathType: typeof file?.storage_path,
+            validStoragePath,
+          });
+
           throw new Error("Invalid folder file record");
         }
 
-        // ป้องกันชื่อพาธซ้ำโดยไม่สนตัวพิมพ์เล็ก/ใหญ่
         const normalizedName = file.name.toLowerCase();
 
         if (seenNames.has(normalizedName)) {
+          console.error("[verify] Duplicate folder file path:", {
+            index: i,
+            nameLength: file.name.length,
+          });
+
           throw new Error("Duplicate folder file path");
         }
 
         seenNames.add(normalizedName);
       }
 
-      // สร้าง Signed URL พร้อมกันครั้งละไม่เกิน 10 ไฟล์
-      // เก็บชื่อและพาธย่อยไว้เหมือนเดิม
+      // สร้าง Signed URL โดยรักษาลำดับไฟล์เดิม
       const files = await mapWithConcurrency(
         folderFiles,
         signingConcurrency,
