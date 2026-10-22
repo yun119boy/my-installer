@@ -1,4 +1,4 @@
-
+```js
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -82,7 +82,6 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // ตรวจสอบชื่อไฟล์และพาธสัมพัทธ์
   function isSafeRelativePath(value) {
     if (
       typeof value !== "string" ||
@@ -117,7 +116,6 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // แปลง Storage URL เป็น path ภายใน bucket
   function normalizeStoragePath(value) {
     if (typeof value !== "string" || !value.trim()) {
       throw new Error("Missing storage path");
@@ -200,7 +198,6 @@ module.exports = async function handler(req, res) {
     return { path, segments };
   }
 
-  // ตรวจสอบ Signed URL ที่ Supabase สร้าง
   function normalizeSignedUrl(value) {
     if (typeof value !== "string" || !value.trim()) {
       throw new Error("Supabase returned an empty signed URL");
@@ -248,7 +245,6 @@ module.exports = async function handler(req, res) {
     return signedUrl.toString();
   }
 
-  // สร้าง Signed URL อายุ 24 ชั่วโมง
   async function createSignedUrl(storagePath) {
     const normalized = normalizeStoragePath(storagePath);
     const candidates = [normalized.path];
@@ -313,7 +309,6 @@ module.exports = async function handler(req, res) {
     );
   }
 
-  // ประมวลผลรายการโดยจำกัดจำนวนงานที่ทำพร้อมกัน
   async function mapWithConcurrency(items, concurrency, worker) {
     const results = new Array(items.length);
     let nextIndex = 0;
@@ -344,7 +339,6 @@ module.exports = async function handler(req, res) {
         ? forwarded.split(",")[0].trim()
         : "unknown";
 
-    // 1. ตรวจสอบ License Key และ Device ID
     const rpcResponse = await fetch(
       `${supabaseUrl}/rest/v1/rpc/verify_license_device`,
       {
@@ -387,7 +381,6 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 2. License แบบไฟล์เดี่ยว
     if (result.type === "file" || !result.type) {
       const fileName =
         typeof result.fileName === "string"
@@ -414,7 +407,6 @@ module.exports = async function handler(req, res) {
         parsedUrl = null;
       }
 
-      // อนุญาตเฉพาะ GitHub Release ที่กำหนด
       if (
         parsedUrl &&
         parsedUrl.protocol === "https:" &&
@@ -448,7 +440,6 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 3. License แบบโฟลเดอร์
     if (result.type === "folder") {
       const folderId = result.folderId;
 
@@ -470,7 +461,6 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // ดึงรายการไฟล์และตรวจเพดาน 1,000 รายการ
       const queryUrl = new URL(
         `${supabaseUrl}/rest/v1/folder_files`
       );
@@ -523,7 +513,6 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      // ตรวจสอบข้อมูลทุกแถวและบันทึกสาเหตุใน Vercel Logs
       const seenNames = new Set();
 
       for (let i = 0; i < folderFiles.length; i++) {
@@ -541,8 +530,18 @@ module.exports = async function handler(req, res) {
               file !== null &&
               typeof file === "object" &&
               !Array.isArray(file),
+            name: file?.name,
+            nameLength:
+              typeof file?.name === "string"
+                ? file.name.length
+                : null,
+            nameHex:
+              typeof file?.name === "string"
+                ? Buffer.from(file.name, "utf8").toString("hex")
+                : null,
             nameType: typeof file?.name,
             validName,
+            storagePath: file?.storage_path,
             storagePathType: typeof file?.storage_path,
             validStoragePath,
           });
@@ -555,7 +554,9 @@ module.exports = async function handler(req, res) {
         if (seenNames.has(normalizedName)) {
           console.error("[verify] Duplicate folder file path:", {
             index: i,
+            name: file.name,
             nameLength: file.name.length,
+            nameHex: Buffer.from(file.name, "utf8").toString("hex"),
           });
 
           throw new Error("Duplicate folder file path");
@@ -564,7 +565,6 @@ module.exports = async function handler(req, res) {
         seenNames.add(normalizedName);
       }
 
-      // สร้าง Signed URL โดยรักษาลำดับไฟล์เดิม
       const files = await mapWithConcurrency(
         folderFiles,
         signingConcurrency,
@@ -612,3 +612,4 @@ module.exports = async function handler(req, res) {
     });
   }
 };
+```
