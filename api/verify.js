@@ -1,4 +1,3 @@
-```js
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -174,7 +173,7 @@ module.exports = async function handler(req, res) {
 
     path = path.replace(/^\/+/, "");
 
-    if (path.startsWith(`${bucket}/`)) {
+    if (path.startsWith(bucket + "/")) {
       path = path.slice(bucket.length + 1);
     }
 
@@ -213,11 +212,14 @@ module.exports = async function handler(req, res) {
         const relative = raw.replace(/^\/+/, "");
 
         if (relative.startsWith("storage/v1/")) {
-          signedUrl = new URL(relative, `${supabaseUrl}/`);
+          signedUrl = new URL(
+            relative,
+            supabaseUrl + "/"
+          );
         } else if (relative.startsWith("object/sign/")) {
           signedUrl = new URL(
-            `storage/v1/${relative}`,
-            `${supabaseUrl}/`
+            "storage/v1/" + relative,
+            supabaseUrl + "/"
           );
         } else {
           throw new Error("Unexpected signed URL path format");
@@ -227,7 +229,7 @@ module.exports = async function handler(req, res) {
       throw new Error("Unable to parse generated signed URL");
     }
 
-    const pathPrefix = `/storage/v1/object/sign/${bucket}/`;
+    const pathPrefix = "/storage/v1/object/sign/" + bucket + "/";
 
     const valid =
       signedUrl.protocol === "https:" &&
@@ -249,7 +251,7 @@ module.exports = async function handler(req, res) {
     const normalized = normalizeStoragePath(storagePath);
     const candidates = [normalized.path];
 
-    if (normalized.path.startsWith(`${bucket}/`)) {
+    if (normalized.path.startsWith(bucket + "/")) {
       candidates.push(
         normalized.path.slice(bucket.length + 1)
       );
@@ -265,18 +267,22 @@ module.exports = async function handler(req, res) {
         .map((segment) => encodeURIComponent(segment))
         .join("/");
 
-      const response = await fetch(
-        `${supabaseUrl}/storage/v1/object/sign/${bucket}/${encodedPath}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: serviceKey,
-            Authorization: `Bearer ${serviceKey}`,
-          },
-          body: JSON.stringify({ expiresIn: 86400 }),
-        }
-      );
+      const signingUrl =
+        supabaseUrl +
+        "/storage/v1/object/sign/" +
+        bucket +
+        "/" +
+        encodedPath;
+
+      const response = await fetch(signingUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: serviceKey,
+          Authorization: "Bearer " + serviceKey,
+        },
+        body: JSON.stringify({ expiresIn: 86400 }),
+      });
 
       if (!response.ok) {
         lastStatus = response.status;
@@ -305,7 +311,10 @@ module.exports = async function handler(req, res) {
     }
 
     throw new Error(
-      `Unable to sign Storage object; status=${lastStatus}; details=${lastDetails}`
+      "Unable to sign Storage object; status=" +
+        lastStatus +
+        "; details=" +
+        lastDetails
     );
   }
 
@@ -340,13 +349,13 @@ module.exports = async function handler(req, res) {
         : "unknown";
 
     const rpcResponse = await fetch(
-      `${supabaseUrl}/rest/v1/rpc/verify_license_device`,
+      supabaseUrl + "/rest/v1/rpc/verify_license_device",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           apikey: serviceKey,
-          Authorization: `Bearer ${serviceKey}`,
+          Authorization: "Bearer " + serviceKey,
         },
         body: JSON.stringify({
           p_key: key,
@@ -462,10 +471,10 @@ module.exports = async function handler(req, res) {
       }
 
       const queryUrl = new URL(
-        `${supabaseUrl}/rest/v1/folder_files`
+        supabaseUrl + "/rest/v1/folder_files"
       );
 
-      queryUrl.searchParams.set("folder_id", `eq.${folderId}`);
+      queryUrl.searchParams.set("folder_id", "eq." + folderId);
       queryUrl.searchParams.set("select", "name,storage_path");
       queryUrl.searchParams.set("order", "name.asc");
       queryUrl.searchParams.set(
@@ -477,7 +486,7 @@ module.exports = async function handler(req, res) {
         method: "GET",
         headers: {
           apikey: serviceKey,
-          Authorization: `Bearer ${serviceKey}`,
+          Authorization: "Bearer " + serviceKey,
         },
       });
 
@@ -509,7 +518,8 @@ module.exports = async function handler(req, res) {
       if (folderFiles.length > maxFolderFiles) {
         return res.status(413).json({
           valid: false,
-          message: "โฟลเดอร์มีไฟล์เกินจำนวนที่อนุญาต (สูงสุด 1,000 ไฟล์)",
+          message:
+            "โฟลเดอร์มีไฟล์เกินจำนวนที่อนุญาต (สูงสุด 1,000 ไฟล์)",
         });
       }
 
@@ -612,4 +622,3 @@ module.exports = async function handler(req, res) {
     });
   }
 };
-```
