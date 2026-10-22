@@ -143,9 +143,9 @@ module.exports = async function handler(req, res) {
       }
 
       const prefixes = [
-        `/storage/v1/object/public/${bucket}/`,
-        `/storage/v1/object/authenticated/${bucket}/`,
-        `/storage/v1/object/sign/${bucket}/`,
+        "/storage/v1/object/public/" + bucket + "/",
+        "/storage/v1/object/authenticated/" + bucket + "/",
+        "/storage/v1/object/sign/" + bucket + "/",
       ];
 
       const prefix = prefixes.find((item) =>
