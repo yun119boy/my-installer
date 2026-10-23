@@ -8,12 +8,10 @@ $ErrorActionPreference = "Stop"
 
 $folder = Join-Path $env:TEMP "MyPlugin"
 
-$steamToolUrl = "https://github.com/yun119boy/my-installer/releases/download/v1.0/st-setup-1.8.30.exe"
 $millenniumUrl = "https://github.com/yun119boy/my-installer/releases/download/v1.0/MillenniumInstaller-Windows.exe"
 $pluginUrl = "https://github.com/yun119boy/my-installer/releases/download/v1.0/com.yun119boy.licensemanager.star"
 $steamZipUrl = "https://github.com/yun119boy/my-installer/releases/download/v1.0/ost3.0.zip"
 
-$steamToolPath = Join-Path $folder "st-setup-1.8.30.exe"
 $millenniumPath = Join-Path $folder "MillenniumInstaller-Windows.exe"
 $pluginPath = Join-Path $folder "com.yun119boy.licensemanager.star"
 $steamZipPath = Join-Path $folder "ost3.0.zip"
@@ -236,15 +234,13 @@ try {
     Write-Host "       License Manager Setup        " -ForegroundColor Cyan
     Write-Host "====================================" -ForegroundColor Cyan
 
-    Download-File -Url $steamToolUrl -Destination $steamToolPath
     Download-File -Url $millenniumUrl -Destination $millenniumPath
     Download-File -Url $pluginUrl -Destination $pluginPath
 
     # ==========================================
-    # 2. Run installers
+    # 2. Install Millennium
     # ==========================================
 
-    Start-VisibleInstaller -Path $steamToolPath -Name "SteamTool"
     Start-VisibleInstaller -Path $millenniumPath -Name "Millennium"
 
     # ==========================================
@@ -295,7 +291,7 @@ try {
             if (
                 [System.IO.Path]::IsPathRooted($entryName) -or
                 $entryName -match '(^|\\)\.\.(\\|$)' -or
-                $entryName -match '^[A-Za-z]:' 
+                $entryName -match '^[A-Za-z]:'
             ) {
                 throw "Unsafe path found inside ZIP archive."
             }
