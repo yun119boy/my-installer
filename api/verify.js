@@ -367,15 +367,21 @@ module.exports = async function handler(req, res) {
     );
 
     if (!rpcResponse.ok) {
+      const errorText = (await rpcResponse.text()).slice(0, 300);
+
       console.error(
         "[verify] License RPC failed:",
         rpcResponse.status,
-        (await rpcResponse.text()).slice(0, 300)
+        errorText
       );
 
       return res.status(500).json({
         valid: false,
-        message: "ไม่สามารถตรวจสอบคีย์ได้ในขณะนี้",
+        message:
+          "ตรวจสอบ License ไม่สำเร็จ | HTTP: " +
+          rpcResponse.status +
+          " | Error: " +
+          errorText,
       });
     }
 
@@ -491,7 +497,7 @@ module.exports = async function handler(req, res) {
         },
       });
 
-      // Debug: ตรวจสอบข้อผิดพลาดจากการอ่าน folder_files
+      // แก้ไข: ส่งรายละเอียดข้อผิดพลาดผ่าน message โดยตรง
       if (!filesResponse.ok) {
         const errorText = await filesResponse.text();
 
@@ -520,8 +526,20 @@ module.exports = async function handler(req, res) {
 
         return res.status(500).json({
           valid: false,
-          message: "อ่านรายการไฟล์ไม่สำเร็จ",
-          debug: debugInfo,
+          message:
+            "อ่านรายการไฟล์ไม่สำเร็จ" +
+            " | HTTP: " +
+            debugInfo.status +
+            " | Code: " +
+            (debugInfo.code || "ไม่มี") +
+            " | Error: " +
+            debugInfo.message +
+            (debugInfo.details
+              ? " | Details: " + debugInfo.details
+              : "") +
+            (debugInfo.hint
+              ? " | Hint: " + debugInfo.hint
+              : ""),
         });
       }
 
@@ -624,7 +642,6 @@ module.exports = async function handler(req, res) {
     });
 
   } catch (error) {
-    // Debug: แสดงรายละเอียดข้อผิดพลาดจาก API
     const debugInfo = {
       name:
         error instanceof Error
@@ -641,10 +658,15 @@ module.exports = async function handler(req, res) {
       debugInfo
     );
 
+    // แก้ไข: ให้ Plugin อ่านรายละเอียดจาก message ได้
     return res.status(500).json({
       valid: false,
-      message: "ไม่สามารถตรวจสอบคีย์หรือสร้างลิงก์ดาวน์โหลดได้",
-      debug: debugInfo,
+      message:
+        "เกิดข้อผิดพลาดในการตรวจสอบ License" +
+        " | " +
+        debugInfo.name +
+        " | " +
+        debugInfo.message,
     });
   }
 };
