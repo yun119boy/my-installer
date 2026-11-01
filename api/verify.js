@@ -19,7 +19,7 @@ module.exports = async function handler(req, res) {
   const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, "");
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const bucket = "installer-files";
-  const allowedHost = "utvmdjprzzteltajqwzk.supabase.co";
+  const allowedHost = "presjfvbsrlfeujgboxy.supabase.co";
   const maxFolderFiles = 1000;
   const signingConcurrency = 10;
 
