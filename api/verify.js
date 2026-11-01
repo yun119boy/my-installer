@@ -1,3 +1,4 @@
+
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -490,16 +491,37 @@ module.exports = async function handler(req, res) {
         },
       });
 
+      // Debug: ตรวจสอบข้อผิดพลาดจากการอ่าน folder_files
       if (!filesResponse.ok) {
+        const errorText = await filesResponse.text();
+
+        let errorData = {};
+
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText };
+        }
+
+        const debugInfo = {
+          status: filesResponse.status,
+          code: errorData.code || null,
+          message: String(
+            errorData.message || "Unknown error"
+          ).slice(0, 300),
+          details: String(errorData.details || "").slice(0, 300),
+          hint: String(errorData.hint || "").slice(0, 300),
+        };
+
         console.error(
           "[verify] Folder file query failed:",
-          filesResponse.status,
-          (await filesResponse.text()).slice(0, 300)
+          debugInfo
         );
 
         return res.status(500).json({
           valid: false,
-          message: "ไม่สามารถอ่านรายการไฟล์ในโฟลเดอร์ได้",
+          message: "อ่านรายการไฟล์ไม่สำเร็จ",
+          debug: debugInfo,
         });
       }
 
@@ -540,18 +562,12 @@ module.exports = async function handler(req, res) {
               file !== null &&
               typeof file === "object" &&
               !Array.isArray(file),
-            name: file?.name,
+            nameType: typeof file?.name,
             nameLength:
               typeof file?.name === "string"
                 ? file.name.length
                 : null,
-            nameHex:
-              typeof file?.name === "string"
-                ? Buffer.from(file.name, "utf8").toString("hex")
-                : null,
-            nameType: typeof file?.name,
             validName,
-            storagePath: file?.storage_path,
             storagePathType: typeof file?.storage_path,
             validStoragePath,
           });
@@ -565,8 +581,6 @@ module.exports = async function handler(req, res) {
           console.error("[verify] Duplicate folder file path:", {
             index: i,
             name: file.name,
-            nameLength: file.name.length,
-            nameHex: Buffer.from(file.name, "utf8").toString("hex"),
           });
 
           throw new Error("Duplicate folder file path");
@@ -608,17 +622,29 @@ module.exports = async function handler(req, res) {
       valid: false,
       message: "ประเภท License ไม่ถูกต้อง",
     });
+
   } catch (error) {
+    // Debug: แสดงรายละเอียดข้อผิดพลาดจาก API
+    const debugInfo = {
+      name:
+        error instanceof Error
+          ? error.name
+          : "UnknownError",
+      message:
+        error instanceof Error
+          ? error.message.slice(0, 500)
+          : "Unknown error",
+    };
+
     console.error(
       "[verify] License verification failed:",
-      error instanceof Error
-        ? error.message
-        : "Unknown error"
+      debugInfo
     );
 
     return res.status(500).json({
       valid: false,
       message: "ไม่สามารถตรวจสอบคีย์หรือสร้างลิงก์ดาวน์โหลดได้",
+      debug: debugInfo,
     });
   }
 };
