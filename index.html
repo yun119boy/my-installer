@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -105,6 +104,22 @@ hr{border:0;border-top:1px solid var(--border);margin:24px 0}
    <h3 style="margin-top:28px">📁 รายการโฟลเดอร์</h3>
    <button class="secondary" type="button" onclick="loadFolders()">รีเฟรชโฟลเดอร์</button>
    <div id="folderList" style="margin-top:12px">กำลังโหลด...</div>
+
+   <h2>➕ เพิ่มไฟล์ลงโฟลเดอร์เดิม</h2>
+   <p class="muted">เลือกโฟลเดอร์ที่มีอยู่แล้ว เพื่อเพิ่มไฟล์หรือเขียนทับไฟล์เดิม โดยไม่สร้างโฟลเดอร์หรือ Key ใหม่</p>
+
+   <label for="existingFolderSelect">เลือกโฟลเดอร์เดิม</label>
+   <select id="existingFolderSelect"><option value="">กำลังโหลด...</option></select>
+
+   <label for="existingFilesInput">เลือกไฟล์ที่ต้องการเพิ่ม</label>
+   <input type="file" id="existingFilesInput" multiple>
+   <button id="addExistingFilesButton" type="button" style="margin-top:12px" onclick="addFilesToExistingFolder(false)">เพิ่มไฟล์ที่เลือก</button>
+
+   <label for="existingFolderInput">หรือเลือกทั้งโฟลเดอร์</label>
+   <input type="file" id="existingFolderInput" multiple webkitdirectory>
+   <button id="addExistingFolderButton" type="button" style="margin-top:12px" onclick="addFilesToExistingFolder(true)">เพิ่มไฟล์จากโฟลเดอร์ที่เลือก</button>
+
+   <div id="existingFolderProgress" class="status" role="status"></div>
 
    <hr>
 
@@ -225,6 +240,7 @@ async function refreshAll(){
  await Promise.all([
   loadFiles(),
   loadFolders(),
+  loadExistingFolderOptions(),
   loadKeyFiles(),
   loadKeys(),
   loadStats(),
@@ -380,7 +396,8 @@ function sanitizeRelativePath(path){
 }
 
 async function uploadFolderSelection(){
- const input=$("uploadFolder");
+
+  const input=$("uploadFolder");
  const button=$("uploadFolderButton");
  const progress=$("folderUploadProgress");
  const displayName=$("folderDisplayName").value.trim();
@@ -513,25 +530,315 @@ async function uploadFolderSelection(){
   errors.length?"error":"success");
 }
 
+/* เพิ่มไฟล์ลงโฟลเดอร์เดิม */
+async function loadExistingFolderOptions(){
+ const select=$("existingFolderSelect");
+ const previousValue=select.value;
+
+ select.replaceChildren(new Option("-- เลือกโฟลเดอร์เดิม --",""));
+
+ const {data,error}=await supabaseClient.from("file_folders")
+  .select("id,name,display_name")
+  .is("deleted_at",null)
+  .order("created_at",{ascending:false});
+
+ if(error){
+  select.replaceChildren(new Option("โหลดโฟลเดอร์ไม่สำเร็จ",""));
+  console.error(error);
+  return;
+ }
+
+ for(const folder of data||[]){
+  select.add(new Option(
+   "📂 "+displayNameOf(folder)+" ("+folder.name+")",
+   folder.id
+  ));
+ }
+
+ if(previousValue&&Array.from(select.options).some(option=>option.value===previousValue)){
+  select.value=previousValue;
+ }
+}
+
+function sanitizeExistingRelativePath(path){
+ const parts=path.replace(/\\/g,"/").split("/");
+
+ if(!parts.length||parts.length>20||parts.some(part=>
+  !part||part==="."||part===".."||!/^[a-zA-Z0-9._-]+$/.test(part)
+ )){
+  throw new Error(
+   "ชื่อไฟล์หรือเส้นทางไม่ถูกต้อง: "+path+
+   "\nอนุญาตเฉพาะภาษาอังกฤษ ตัวเลข จุด ขีดกลาง และขีดล่าง"
+  );
+ }
+
+ const normalized=parts.join("/");
+
+ if(normalized.length>240){
+  throw new Error("เส้นทางไฟล์ยาวเกินไป: "+path);
+ }
+
+ return normalized;
+}
+
+async function addFilesToExistingFolder(isFolderSelection){
+ const folderId=$("existingFolderSelect").value;
+ const input=isFolderSelection
+  ?$("existingFolderInput")
+  :$("existingFilesInput");
+
+ const button=$(isFolderSelection
+  ?"addExistingFolderButton"
+  :"addExistingFilesButton");
+
+ const otherButton=$(isFolderSelection
+  ?"addExistingFilesButton"
+  :"addExistingFolderButton");
+
+ const progress=$("existingFolderProgress");
+ const selected=Array.from(input.files||[]);
+
+ if(!folderId){
+  alert("กรุณาเลือกโฟลเดอร์เดิมก่อน");
+  return;
+ }
+
+ if(!selected.length){
+  alert("กรุณาเลือกไฟล์ก่อน");
+  return;
+ }
+
+ if(selected.length>1000){
+  alert("เลือกไฟล์ได้ไม่เกิน 1,000 ไฟล์ต่อครั้ง");
+  return;
+ }
+
+ let entries=[];
+
+ try{
+  for(const file of selected){
+   let relativePath=file.name;
+
+   if(isFolderSelection){
+    const parts=(file.webkitRelativePath||file.name)
+     .replace(/\\/g,"/")
+     .split("/");
+
+    if(parts.length<2){
+     throw new Error("กรุณาเลือกโฟลเดอร์ ไม่ใช่เลือกไฟล์เดี่ยว");
+    }
+
+    relativePath=parts.slice(1).join("/");
+   }
+
+   relativePath=sanitizeExistingRelativePath(relativePath);
+   entries.push({file,relativePath});
+  }
+
+  const selectedNames=new Set();
+
+  for(const entry of entries){
+   const key=entry.relativePath.toLowerCase();
+
+   if(selectedNames.has(key)){
+    throw new Error("พบไฟล์ที่มีชื่อและเส้นทางซ้ำกัน: "+entry.relativePath);
+   }
+
+   selectedNames.add(key);
+  }
+ }catch(error){
+  alert(error.message);
+  return;
+ }
+
+ let overwriteCount=0;
+
+ try{
+  const {data,error}=await supabaseClient
+   .from("folder_files")
+   .select("name")
+   .eq("folder_id",folderId);
+
+  if(error)throw error;
+
+  const existing=new Set(
+   (data||[]).map(row=>row.name.toLowerCase())
+  );
+
+  overwriteCount=entries.filter(entry=>
+   existing.has(entry.relativePath.toLowerCase())
+  ).length;
+
+ }catch(error){
+  alert("ตรวจสอบไฟล์เดิมไม่สำเร็จ: "+error.message);
+  return;
+ }
+
+ const newCount=entries.length-overwriteCount;
+
+ if(!confirm(
+  `โฟลเดอร์นี้จะได้รับไฟล์ทั้งหมด ${entries.length} ไฟล์\n\n`+
+  `ไฟล์ใหม่: ${newCount} ไฟล์\n`+
+  `เขียนทับไฟล์เดิม: ${overwriteCount} ไฟล์\n\n`+
+  `ไฟล์อื่นที่ไม่ได้เลือกจะไม่ถูกเปลี่ยนแปลง\n\n`+
+  `ต้องการดำเนินการต่อหรือไม่?`
+ ))return;
+
+ try{
+  await requireSession();
+ }catch(error){
+  alert(error.message);
+  return;
+ }
+
+ button.disabled=true;
+ otherButton.disabled=true;
+
+ let added=0;
+ let overwritten=0;
+ const errors=[];
+
+ try{
+  const {data:folder,error:folderError}=await supabaseClient
+   .from("file_folders")
+   .select("id,storage_path,deleted_at")
+   .eq("id",folderId)
+   .maybeSingle();
+
+  if(folderError)throw folderError;
+
+  if(!folder||folder.deleted_at){
+   throw new Error("ไม่พบโฟลเดอร์ หรือโฟลเดอร์ถูกปิดใช้งานแล้ว");
+  }
+
+  const prefix=folder.storage_path||"folder-contents/"+folder.id;
+
+  const {data:oldRows,error:rowsError}=await supabaseClient
+   .from("folder_files")
+   .select("id,name,storage_path")
+   .eq("folder_id",folderId);
+
+  if(rowsError)throw rowsError;
+
+  const existing=new Map();
+
+  for(const row of oldRows||[]){
+   const key=row.name.toLowerCase();
+
+   if(existing.has(key)){
+    throw new Error("ฐานข้อมูลมีเส้นทางไฟล์ซ้ำกัน: "+row.name);
+   }
+
+   existing.set(key,row);
+  }
+
+  for(let i=0;i<entries.length;i++){
+   const entry=entries[i];
+   const relativePath=entry.relativePath;
+   const oldRow=existing.get(relativePath.toLowerCase());
+
+   const objectPath=oldRow
+    ?oldRow.storage_path
+    :prefix+"/"+relativePath;
+
+   if(!objectPath){
+    errors.push(relativePath+": ไม่พบ Storage path");
+    continue;
+   }
+
+   setStatus(progress,
+    `กำลังดำเนินการ ${i+1}/${entries.length}\n`+
+    `${oldRow?"กำลังเขียนทับ":"กำลังเพิ่ม"}: ${relativePath}`
+   );
+
+   const {error:uploadError}=await supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .upload(objectPath,entry.file,{
+     upsert:!!oldRow,
+     contentType:entry.file.type||"application/octet-stream"
+    });
+
+   if(uploadError){
+    errors.push(relativePath+": "+uploadError.message);
+    continue;
+   }
+
+   if(oldRow){
+    overwritten++;
+   }else{
+    const {error:insertError}=await supabaseClient
+     .from("folder_files")
+     .insert({
+      folder_id:folderId,
+      name:relativePath,
+      storage_path:objectPath
+     });
+
+    if(insertError){
+     await supabaseClient.storage
+      .from(STORAGE_BUCKET)
+      .remove([objectPath]);
+
+     errors.push(relativePath+": "+insertError.message);
+     continue;
+    }
+
+    added++;
+   }
+  }
+
+ }catch(error){
+  errors.push(error.message);
+
+ }finally{
+  button.disabled=false;
+  otherButton.disabled=false;
+  input.value="";
+ }
+
+ await refreshAll();
+
+ setStatus(progress,
+  `เพิ่มไฟล์ใหม่สำเร็จ ${added} ไฟล์\n`+
+  `เขียนทับไฟล์เดิมสำเร็จ ${overwritten} ไฟล์`+
+  (errors.length
+   ?"\n\nรายการที่ไม่สำเร็จ:\n"+errors.join("\n")
+   :""),
+  errors.length?"error":"success"
+ );
+}
+
 /* เพิ่ม URL ภายนอก */
 async function addFile(){
  const name=$("fileName").value.trim();
  const url=$("fileUrl").value.trim();
  const displayName=$("externalDisplayName").value.trim();
 
- if(!name||!url){alert("กรุณากรอกชื่อไฟล์จริงและ URL");return;}
+ if(!name||!url){
+  alert("กรุณากรอกชื่อไฟล์จริงและ URL");
+  return;
+ }
 
  let parsed;
- try{parsed=new URL(url);}
- catch{alert("URL ไม่ถูกต้อง");return;}
+
+ try{
+  parsed=new URL(url);
+ }catch{
+  alert("URL ไม่ถูกต้อง");
+  return;
+ }
 
  if(!["http:","https:"].includes(parsed.protocol)){
   alert("อนุญาตเฉพาะ URL http:// หรือ https://");
   return;
  }
 
- try{await requireSession();}
- catch(error){alert(error.message);return;}
+ try{
+  await requireSession();
+ }catch(error){
+  alert(error.message);
+  return;
+ }
 
  const {error}=await supabaseClient.from("files").insert({
   name,
@@ -539,7 +846,10 @@ async function addFile(){
   storage_url:url
  });
 
- if(error){alert("เพิ่ม URL ไม่สำเร็จ: "+error.message);return;}
+ if(error){
+  alert("เพิ่ม URL ไม่สำเร็จ: "+error.message);
+  return;
+ }
 
  $("fileName").value="";
  $("fileUrl").value="";
@@ -551,7 +861,11 @@ async function addFile(){
 
 /* แทนที่ไฟล์เดี่ยว */
 async function replaceFile(fileId,oldFile){
- if(oldFile.deleted_at){alert("รายการนี้ถูกปิดใช้งานแล้ว");return;}
+ if(oldFile.deleted_at){
+  alert("รายการนี้ถูกปิดใช้งานแล้ว");
+  return;
+ }
+
  if(isExternalUrl(oldFile.storage_url)){
   alert("URL ภายนอกไม่สามารถอัปเดตผ่าน Storage ได้");
   return;
@@ -571,10 +885,12 @@ async function replaceFile(fileId,oldFile){
   try{
    await requireSession();
 
-   uploadedPath=crypto.randomUUID()+"/"+newFile.name.replace(/[\/\\]/g,"_");
+   uploadedPath=crypto.randomUUID()+"/"+
+    newFile.name.replace(/[\/\\]/g,"_");
 
    const {error:uploadError}=await supabaseClient.storage
-    .from(STORAGE_BUCKET).upload(uploadedPath,newFile,{
+    .from(STORAGE_BUCKET)
+    .upload(uploadedPath,newFile,{
      upsert:false,
      contentType:newFile.type||"application/octet-stream"
     });
@@ -583,13 +899,16 @@ async function replaceFile(fileId,oldFile){
 
    const {data,error:updateError}=await supabaseClient.from("files")
     .update({name:newFile.name,storage_url:uploadedPath})
-    .eq("id",fileId).is("deleted_at",null).select("id");
+    .eq("id",fileId)
+    .is("deleted_at",null)
+    .select("id");
 
    if(updateError)throw updateError;
    if(!data?.length)throw new Error("ไม่พบรายการไฟล์ที่ยังใช้งานอยู่");
 
    const {error:removeError}=await supabaseClient.storage
-    .from(STORAGE_BUCKET).remove([oldFile.storage_url]);
+    .from(STORAGE_BUCKET)
+    .remove([oldFile.storage_url]);
 
    uploadedPath=null;
 
@@ -599,10 +918,12 @@ async function replaceFile(fileId,oldFile){
 
   }catch(error){
    alert("แทนที่ไฟล์ไม่สำเร็จ: "+error.message);
+
   }finally{
    if(uploadedPath){
     await supabaseClient.storage.from(STORAGE_BUCKET).remove([uploadedPath]);
    }
+
    await refreshAll();
   }
  });
@@ -619,20 +940,27 @@ async function deleteFile(file){
 
   const {data,error}=await supabaseClient.from("files")
    .update({deleted_at:new Date().toISOString()})
-   .eq("id",file.id).is("deleted_at",null).select("id");
+   .eq("id",file.id)
+   .is("deleted_at",null)
+   .select("id");
 
   if(error)throw error;
   if(!data?.length)throw new Error("รายการถูกปิดใช้งานไปแล้ว");
 
   if(objectPathOf(file)){
    const {error:removeError}=await supabaseClient.storage
-    .from(STORAGE_BUCKET).remove([file.storage_url]);
+    .from(STORAGE_BUCKET)
+    .remove([file.storage_url]);
 
-   if(removeError)alert("ปิดใช้งานแล้ว แต่ลบไฟล์จาก Storage ไม่สำเร็จ: "+removeError.message);
-   else alert("ปิดใช้งานและลบไฟล์สำเร็จ");
+   if(removeError){
+    alert("ปิดใช้งานแล้ว แต่ลบไฟล์จาก Storage ไม่สำเร็จ: "+removeError.message);
+   }else{
+    alert("ปิดใช้งานและลบไฟล์สำเร็จ");
+   }
   }else{
    alert("ปิดใช้งาน URL สำเร็จ");
   }
+
  }catch(error){
   alert("ลบไฟล์ไม่สำเร็จ: "+error.message);
  }
@@ -651,8 +979,15 @@ async function loadFiles(){
 
  container.replaceChildren();
 
- if(error){container.textContent="โหลดไฟล์ไม่สำเร็จ: "+error.message;return;}
- if(!data?.length){container.textContent="ยังไม่มีไฟล์";return;}
+ if(error){
+  container.textContent="โหลดไฟล์ไม่สำเร็จ: "+error.message;
+  return;
+ }
+
+ if(!data?.length){
+  container.textContent="ยังไม่มีไฟล์";
+  return;
+ }
 
  for(const file of data){
   const card=makeElement("div",null,"item");
@@ -671,11 +1006,14 @@ async function loadFiles(){
     try{
      const link=await getFileLink(file);
      window.open(link,"_blank","noopener,noreferrer");
-    }catch(error){alert("เปิดไฟล์ไม่สำเร็จ: "+error.message);}
+    }catch(error){
+     alert("เปิดไฟล์ไม่สำเร็จ: "+error.message);
+    }
    }));
 
-   if(!isExternalUrl(file.storage_url))
+   if(!isExternalUrl(file.storage_url)){
     actions.appendChild(makeButton("แทนที่ไฟล์",()=>replaceFile(file.id,file)));
+   }
 
    actions.appendChild(makeButton("ปิดใช้งาน",()=>deleteFile(file),"danger"));
    card.appendChild(actions);
@@ -694,16 +1032,26 @@ async function loadFolders(){
   .select("id,name,display_name,storage_path,created_at,deleted_at")
   .order("created_at",{ascending:false});
 
- if(error){container.textContent="โหลดโฟลเดอร์ไม่สำเร็จ: "+error.message;return;}
+ if(error){
+  container.textContent="โหลดโฟลเดอร์ไม่สำเร็จ: "+error.message;
+  return;
+ }
 
  const {data:children,error:childrenError}=await supabaseClient
-  .from("folder_files").select("folder_id,name");
+  .from("folder_files")
+  .select("folder_id,name");
 
- if(childrenError){container.textContent="โหลดไฟล์ย่อยไม่สำเร็จ: "+childrenError.message;return;}
+ if(childrenError){
+  container.textContent="โหลดไฟล์ย่อยไม่สำเร็จ: "+childrenError.message;
+  return;
+ }
 
  container.replaceChildren();
 
- if(!folders?.length){container.textContent="ยังไม่มีโฟลเดอร์";return;}
+ if(!folders?.length){
+  container.textContent="ยังไม่มีโฟลเดอร์";
+  return;
+ }
 
  for(const folder of folders){
   const folderChildren=(children||[]).filter(row=>row.folder_id===folder.id);
@@ -727,7 +1075,9 @@ async function loadFolders(){
 
   const toggle=makeButton("ดูไฟล์ภายใน",()=>{
    contents.style.display=contents.style.display==="none"?"block":"none";
-   toggle.textContent=contents.style.display==="none"?"ดูไฟล์ภายใน":"ซ่อนรายการไฟล์";
+   toggle.textContent=contents.style.display==="none"
+    ?"ดูไฟล์ภายใน"
+    :"ซ่อนรายการไฟล์";
   });
 
   card.appendChild(toggle);
@@ -738,7 +1088,11 @@ async function loadFolders(){
 
   card.appendChild(contents);
 
-  card.appendChild(makeButton("ปิดใช้งานโฟลเดอร์",()=>deleteFolder(folder),"danger"));
+  card.appendChild(makeButton(
+   "ปิดใช้งานโฟลเดอร์",
+   ()=>deleteFolder(folder),
+   "danger"
+  ));
 
   container.appendChild(card);
  }
@@ -757,21 +1111,28 @@ async function deleteFolder(folder){
   const {data:updated,error:updateError}=await supabaseClient
    .from("file_folders")
    .update({deleted_at:new Date().toISOString()})
-   .eq("id",folder.id).is("deleted_at",null).select("id");
+   .eq("id",folder.id)
+   .is("deleted_at",null)
+   .select("id");
 
   if(updateError)throw updateError;
   if(!updated?.length)throw new Error("โฟลเดอร์นี้ถูกปิดใช้งานไปแล้ว");
 
   const {data:children,error:childrenError}=await supabaseClient
-   .from("folder_files").select("storage_path").eq("folder_id",folder.id);
+   .from("folder_files")
+   .select("storage_path")
+   .eq("folder_id",folder.id);
 
   if(childrenError)throw childrenError;
 
-  const paths=(children||[]).map(row=>row.storage_path).filter(Boolean);
+  const paths=(children||[])
+   .map(row=>row.storage_path)
+   .filter(Boolean);
 
   if(paths.length){
    const {error:removeError}=await supabaseClient.storage
-    .from(STORAGE_BUCKET).remove(paths);
+    .from(STORAGE_BUCKET)
+    .remove(paths);
 
    if(removeError){
     alert("ปิดใช้งานโฟลเดอร์แล้ว แต่ลบไฟล์บางส่วนไม่สำเร็จ: "+removeError.message);
@@ -781,6 +1142,7 @@ async function deleteFolder(folder){
   }else{
    alert("ปิดใช้งานโฟลเดอร์แล้ว");
   }
+
  }catch(error){
   alert("ปิดใช้งานโฟลเดอร์ไม่สำเร็จ: "+error.message);
  }
@@ -797,11 +1159,13 @@ async function loadKeyFiles(){
  const [filesResult,foldersResult]=await Promise.all([
   supabaseClient.from("files")
    .select("id,name,display_name")
-   .is("deleted_at",null).order("name"),
+   .is("deleted_at",null)
+   .order("name"),
 
   supabaseClient.from("file_folders")
    .select("id,name,display_name")
-   .is("deleted_at",null).order("name")
+   .is("deleted_at",null)
+   .order("name")
  ]);
 
  if(filesResult.error||foldersResult.error){
@@ -835,9 +1199,14 @@ function createRandomKey(){
 
 async function generateKey(){
  const value=$("keyTarget").value;
- if(!value){alert("กรุณาเลือกไฟล์หรือโฟลเดอร์ก่อน");return;}
+
+ if(!value){
+  alert("กรุณาเลือกไฟล์หรือโฟลเดอร์ก่อน");
+  return;
+ }
 
  const [type,targetId]=value.split(":");
+
  if(!["file","folder"].includes(type)||!targetId){
   alert("รายการที่เลือกไม่ถูกต้อง");
   return;
@@ -847,12 +1216,21 @@ async function generateKey(){
   await requireSession();
 
   const table=type==="file"?"files":"file_folders";
+
   const {data:target,error:targetError}=await supabaseClient
-   .from(table).select("id").eq("id",targetId)
-   .is("deleted_at",null).maybeSingle();
+   .from(table)
+   .select("id")
+   .eq("id",targetId)
+   .is("deleted_at",null)
+   .maybeSingle();
 
   if(targetError)throw targetError;
-  if(!target){alert("รายการนี้ถูกปิดใช้งานแล้ว");await loadKeyFiles();return;}
+
+  if(!target){
+   alert("รายการนี้ถูกปิดใช้งานแล้ว");
+   await loadKeyFiles();
+   return;
+  }
 
   const keyCode=createRandomKey();
 
@@ -911,7 +1289,10 @@ async function loadKeys(){
   return;
  }
 
- if(!data?.length){container.textContent="ยังไม่มี Key";return;}
+ if(!data?.length){
+  container.textContent="ยังไม่มี Key";
+  return;
+ }
 
  for(const key of data){
   const card=makeElement("div",null,"item");
@@ -921,12 +1302,16 @@ async function loadKeys(){
    const folder=key.file_folders;
    addLine(card,"ประเภท: โฟลเดอร์");
    addLine(card,"โฟลเดอร์: "+displayNameOf(folder||{}));
-   if(folder?.deleted_at)addLine(card,"หมายเหตุ: โฟลเดอร์ถูกปิดใช้งานแล้ว");
+   if(folder?.deleted_at){
+    addLine(card,"หมายเหตุ: โฟลเดอร์ถูกปิดใช้งานแล้ว");
+   }
   }else{
    const file=key.files;
    addLine(card,"ประเภท: ไฟล์เดี่ยว");
    addLine(card,"ไฟล์: "+displayNameOf(file||{}));
-   if(file?.deleted_at)addLine(card,"หมายเหตุ: ไฟล์ถูกปิดใช้งานแล้ว");
+   if(file?.deleted_at){
+    addLine(card,"หมายเหตุ: ไฟล์ถูกปิดใช้งานแล้ว");
+   }
   }
 
   addLine(card,"สถานะ Key: "+(key.status||"unused"));
@@ -963,7 +1348,10 @@ async function loadUsageHistory(){
   return;
  }
 
- if(!data?.length){container.textContent="ยังไม่มีประวัติการใช้งาน";return;}
+ if(!data?.length){
+  container.textContent="ยังไม่มีประวัติการใช้งาน";
+  return;
+ }
 
  for(const item of data){
   const card=makeElement("div",null,"item");
@@ -973,12 +1361,16 @@ async function loadUsageHistory(){
    const folder=key.file_folders;
    addLine(card,"ประเภท: โฟลเดอร์");
    addLine(card,"โฟลเดอร์: "+displayNameOf(folder||{}));
-   if(folder?.deleted_at)addLine(card,"หมายเหตุ: โฟลเดอร์ถูกปิดใช้งานแล้ว");
+   if(folder?.deleted_at){
+    addLine(card,"หมายเหตุ: โฟลเดอร์ถูกปิดใช้งานแล้ว");
+   }
   }else{
    const file=key?.files;
    addLine(card,"ประเภท: ไฟล์เดี่ยว");
    addLine(card,"ไฟล์: "+displayNameOf(file||{}));
-   if(file?.deleted_at)addLine(card,"หมายเหตุ: ไฟล์ถูกปิดใช้งานแล้ว");
+   if(file?.deleted_at){
+    addLine(card,"หมายเหตุ: ไฟล์ถูกปิดใช้งานแล้ว");
+   }
   }
 
   addLine(card,"Key: "+(key?.key_code||"-"));
